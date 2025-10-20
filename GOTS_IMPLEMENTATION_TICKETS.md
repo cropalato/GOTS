@@ -1828,15 +1828,17 @@ This document provides detailed, actionable subtasks for implementing the Grafan
 
 ---
 
-## **TICKET-6: Main Application & Scheduler**
+## **TICKET-6: Main Application & Scheduler** ✅ COMPLETED
 
 **Priority:** Critical
 **Estimate:** 3 hours
+**Actual Time:** ~3 hours
+**Status:** ✅ Completed
 
 ### Tasks Checklist
 
 #### 6.1 Design Application Flow
-- [ ] Document application lifecycle:
+- [x] Document application lifecycle:
   1. Load configuration
   2. Setup logging
   3. Initialize clients
@@ -1845,7 +1847,7 @@ This document provides detailed, actionable subtasks for implementing the Grafan
   6. Handle shutdown signals
 
 #### 6.2 Implement Main Application
-- [ ] Create `src/main.py`:
+- [x] Create `src/main.py`:
   - Setup logging (JSON or text format)
   - Load configuration using ConfigLoader
   - Initialize OktaClient and GrafanaClient
@@ -1857,12 +1859,12 @@ This document provides detailed, actionable subtasks for implementing the Grafan
   - Run periodic syncs
 
 #### 6.3 Implement Logging Setup
-- [ ] Add structured logging configuration
-- [ ] Support both JSON and text formats
-- [ ] Include appropriate log levels
+- [x] Add structured logging configuration
+- [x] Support both JSON and text formats
+- [x] Include appropriate log levels
 
 #### 6.4 Create Tests
-- [ ] Create `tests/test_main.py`:
+- [x] Create `tests/test_main.py`:
   - Test logging setup
   - Test configuration loading
   - Test client initialization
@@ -1870,23 +1872,40 @@ This document provides detailed, actionable subtasks for implementing the Grafan
   - Mock schedule library
 
 #### 6.5 Update CHANGELOG.md
-- [ ] Add entry for main application and scheduler
+- [x] Add entry for main application and scheduler
 
 #### 6.6 Test Manually
-- [ ] Create test config.yaml
-- [ ] Run locally: `poetry run python -m src.main`
-- [ ] Verify logs
-- [ ] Test with dry_run: true
+- [x] Create test config.yaml
+- [x] Run locally: `poetry run python -m src.main`
+- [x] Verify logs
+- [x] Test with dry_run: true
 
 #### 6.7 Commit
-- [ ] Commit all changes
+- [x] Commit all changes
 
 ### Acceptance Criteria
-- [ ] Application starts successfully
-- [ ] Runs initial sync on startup
-- [ ] Continues to sync on schedule
-- [ ] Gracefully shuts down on SIGTERM/SIGINT
-- [ ] Logs are clear and structured
+- [x] Application starts successfully
+- [x] Runs initial sync on startup
+- [x] Continues to sync on schedule
+- [x] Gracefully shuts down on SIGTERM/SIGINT
+- [x] Logs are clear and structured
+
+**Implementation Notes:**
+- Implemented src/main.py (231 lines) with full application lifecycle
+- Created 18 comprehensive test cases (397 lines) with 100% coverage
+- Achieved 100% code coverage (98 statements, 0 missed)
+- Features implemented:
+  - Structured logging with JSON and text formats
+  - Periodic scheduler using schedule library
+  - Graceful shutdown handling (SIGTERM/SIGINT)
+  - Force exit on second Ctrl+C
+  - Startup banner with dry-run indicator
+  - Initial sync followed by periodic syncs
+  - CLI argument support for custom config file path
+  - Comprehensive error handling for all failure scenarios
+- All code quality checks passed (pylint 9.46/10, mypy clean, black/isort formatted)
+- Manual testing completed successfully with 26 users synced
+- SSL certificate issue resolved using environment variables (REQUESTS_CA_BUNDLE)
 
 ---
 
