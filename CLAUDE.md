@@ -492,3 +492,4 @@ Follow the ticket sequence in `grafana-okta-team-sync.md`:
 - **Testing is mandatory, not optional.** Every ticket that involves code must include corresponding tests.
 - **CHANGELOG.md must be updated with every meaningful commit.** Add entries to the [Unreleased] section before committing.
 - **Follow Semantic Versioning** for all releases and version tags.
+- Update GOTS_IMPLEMENTATION_TICKETS.md whenever you finish a task.
