@@ -57,5 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTP request timeouts set to 30 seconds across all API clients
 - Exponential backoff configured (2-60 seconds, 5 retry attempts)
 - Extensive test coverage for all failure scenarios (network, auth, rate limits, partial failures)
+- Comprehensive README.md documentation with setup guides, troubleshooting, and examples
+- Complete Okta and Grafana setup instructions
+- Docker deployment guide with docker-compose examples
+- Development guide with testing and code quality instructions
+- Troubleshooting section for common issues
+- Environment variables reference table
+- Detailed sync behavior explanation
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD
