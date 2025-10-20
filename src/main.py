@@ -1,4 +1,5 @@
 """Main application entry point and scheduler."""
+
 import json
 import logging
 import signal
@@ -91,7 +92,7 @@ def print_banner(dry_run: bool) -> None:
     banner = """
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   Grafana-Okta Team Sync (GOTS)                          ║
+║   Grafana-Okta Team Sync (GOTS)                           ║
 ║   Automated team synchronization service                  ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
