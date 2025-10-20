@@ -41,5 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Case-insensitive email matching for user synchronization
 - Partial failure handling (continues sync even if individual operations fail)
 - Comprehensive test suite for sync service (16 test cases, 100% coverage)
+- Main application entry point with command-line interface
+- Periodic sync scheduler using the schedule library
+- Structured logging with JSON and text format support
+- Graceful shutdown handling (SIGTERM, SIGINT)
+- Startup banner with dry-run mode indicator
+- Initial sync on startup followed by periodic syncs
+- Configuration loading from YAML files with CLI argument support
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD
