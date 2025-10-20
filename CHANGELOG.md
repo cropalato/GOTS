@@ -35,5 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive error handling (401, 403, 404, 409, 5xx errors)
 - Support for both 200 OK and 201 Created success responses
 - Comprehensive test suite for Grafana client (29 test cases, 100% coverage)
+- Core sync service with bidirectional member synchronization
+- Dry-run mode for testing sync operations without making changes
+- Sync metrics tracking (users added, users removed, errors, duration)
+- Case-insensitive email matching for user synchronization
+- Partial failure handling (continues sync even if individual operations fail)
+- Comprehensive test suite for sync service (16 test cases, 100% coverage)
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD
