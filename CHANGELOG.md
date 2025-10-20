@@ -48,5 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Startup banner with dry-run mode indicator
 - Initial sync on startup followed by periodic syncs
 - Configuration loading from YAML files with CLI argument support
+- Docker containerization with multi-stage build for minimal image size (162MB)
+- Docker Compose configuration for local testing and deployment
+- Non-root container execution for improved security
+- Environment variable configuration support in Docker
+- Volume mounting support for configuration files and CA certificates
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD

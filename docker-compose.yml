@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  gots:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gots
+    environment:
+      # Okta Configuration
+      - OKTA_DOMAIN=${OKTA_DOMAIN}
+      - OKTA_API_TOKEN=${OKTA_API_TOKEN}
+
+      # Grafana Configuration
+      - GRAFANA_URL=${GRAFANA_URL}
+      - GRAFANA_API_KEY=${GRAFANA_API_KEY}
+
+      # Sync Configuration (optional - can be set in config.yaml)
+      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-300}
+      - SYNC_DRY_RUN=${SYNC_DRY_RUN:-true}
+
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+
+      # SSL/TLS Configuration (optional)
+      # Uncomment if you need to provide a custom CA certificate
+      # - REQUESTS_CA_BUNDLE=/app/certs/ca-certificates.crt
+
+    # Mount config.yaml from host (optional - can use env vars instead)
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      # Uncomment if you need to mount custom CA certificates
+      # - /etc/ssl/certs:/app/certs:ro
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Resource limits (optional but recommended for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.5'
+    #       memory: 256M
+    #     reservations:
+    #       cpus: '0.1'
+    #       memory: 128M
