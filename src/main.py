@@ -67,9 +67,18 @@ def signal_handler(signum: int, _frame) -> None:  # type: ignore[no-untyped-def]
         _frame: Current stack frame (unused)
     """
     global shutdown_requested  # pylint: disable=global-statement
+
+    if shutdown_requested:
+        # Second signal - force exit immediately
+        logging.warning("Forcing immediate shutdown...")
+        sys.exit(1)
+
     signal_name = signal.Signals(signum).name
     logging.info("Received signal %s, initiating graceful shutdown...", signal_name)
     shutdown_requested = True
+
+    # Raise KeyboardInterrupt to break out of blocking operations
+    raise KeyboardInterrupt()
 
 
 def print_banner(dry_run: bool) -> None:
@@ -101,6 +110,9 @@ def run_sync(sync_service: SyncService, okta_group: str, grafana_team: str) -> N
         sync_service: Initialized SyncService instance
         okta_group: Okta group name
         grafana_team: Grafana team name
+
+    Raises:
+        KeyboardInterrupt: Re-raised to allow graceful shutdown
     """
     try:
         logging.info("Starting sync: %s -> %s", okta_group, grafana_team)
@@ -112,6 +124,9 @@ def run_sync(sync_service: SyncService, okta_group: str, grafana_team: str) -> N
             metrics.errors,
             metrics.duration_seconds,
         )
+    except KeyboardInterrupt:
+        logging.info("Sync interrupted by user")
+        raise
     except Exception as e:  # pylint: disable=broad-except
         logging.error(
             "Sync failed for %s -> %s: %s",
