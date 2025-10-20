@@ -27,5 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom exception types for different error scenarios
 - Rate limit tracking and logging
 - Comprehensive test suite for Okta client (19 test cases with mocked HTTP responses)
+- Grafana API client with team and user management
+- Team operations: search, create, and get-or-create with automatic retrieval
+- User operations: lookup, create, and get-or-create with email-based search
+- Team membership operations: add and remove users from teams
+- Retry logic with exponential backoff for HTTP requests
+- Comprehensive error handling (401, 403, 404, 409, 5xx errors)
+- Support for both 200 OK and 201 Created success responses
+- Comprehensive test suite for Grafana client (29 test cases, 100% coverage)
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD
