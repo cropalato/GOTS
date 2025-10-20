@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration validation with clear error messages
 - Support for multiple Okta-to-Grafana group mappings
 - Environment variable expansion (${VAR_NAME} syntax) in YAML configuration
-- Comprehensive test suite for configuration module (30+ test cases, >95% coverage)
+- Comprehensive test suite for configuration module (36 test cases, 100% coverage)
+- Okta API client with group search and member retrieval
+- Automatic pagination support for large Okta groups
+- Retry logic with exponential backoff for transient failures
+- Comprehensive error handling (401, 404, 429, 5xx errors)
+- Custom exception types for different error scenarios
+- Rate limit tracking and logging
+- Comprehensive test suite for Okta client (19 test cases with mocked HTTP responses)
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD
