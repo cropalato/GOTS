@@ -87,7 +87,7 @@ ipython_config.py
 Pipfile.lock
 
 # poetry
-poetry.lock
+# Note: poetry.lock should be committed for applications to ensure reproducible builds
 
 # PEP 582
 __pypackages__/
