@@ -475,3 +475,133 @@ class TestSyncService:
 
         # Verify team creation was called
         mock_grafana_client.get_or_create_team.assert_called_once_with("NewTeam")
+
+    def test_sync_admin_privileges_grant_and_revoke(
+        self,
+        sync_service: SyncService,
+        mock_okta_client: Mock,
+        mock_grafana_client: Mock,
+    ) -> None:
+        """Test syncing admin privileges with grants and revokes."""
+        # Setup Okta admin group members
+        mock_okta_client.get_group_members_by_name.return_value = [
+            {"profile": {"email": "admin1@example.com"}},
+            {"profile": {"email": "admin2@example.com"}},
+        ]
+
+        # Mock the _get method to return all Grafana users
+        class MockResponse:
+            def json(self):
+                return [
+                    {
+                        "userId": 1,
+                        "email": "admin1@example.com",
+                        "isGrafanaAdmin": False,  # Needs to be granted
+                    },
+                    {
+                        "userId": 2,
+                        "email": "admin2@example.com",
+                        "isGrafanaAdmin": True,  # Already admin
+                    },
+                    {
+                        "userId": 3,
+                        "email": "user@example.com",
+                        "isGrafanaAdmin": True,  # Needs to be revoked
+                    },
+                ]
+
+        mock_grafana_client._get.return_value = MockResponse()
+
+        # Execute admin sync
+        admins_updated = sync_service.sync_admin_privileges(["Grafana-Admins"])
+
+        # Verify results
+        assert admins_updated == 2  # admin1 granted, user revoked
+
+        # Verify Okta API was called
+        mock_okta_client.get_group_members_by_name.assert_called_once_with("Grafana-Admins")
+
+        # Verify Grafana API calls
+        assert mock_grafana_client.set_user_admin_permission.call_count == 2
+        mock_grafana_client.set_user_admin_permission.assert_any_call(1, True)
+        mock_grafana_client.set_user_admin_permission.assert_any_call(3, False)
+
+    def test_sync_admin_privileges_empty_list(
+        self,
+        sync_service: SyncService,
+        mock_okta_client: Mock,
+        mock_grafana_client: Mock,
+    ) -> None:
+        """Test sync admin privileges with empty admin groups list."""
+        admins_updated = sync_service.sync_admin_privileges([])
+
+        # Verify no API calls made
+        assert admins_updated == 0
+        mock_okta_client.get_group_members_by_name.assert_not_called()
+        mock_grafana_client._get.assert_not_called()
+
+    def test_sync_admin_privileges_multiple_groups(
+        self,
+        sync_service: SyncService,
+        mock_okta_client: Mock,
+        mock_grafana_client: Mock,
+    ) -> None:
+        """Test syncing admin privileges from multiple groups."""
+        # Setup Okta groups
+        def get_group_members_side_effect(group_name: str):
+            if group_name == "Grafana-Admins":
+                return [{"profile": {"email": "admin1@example.com"}}]
+            elif group_name == "Platform-Team":
+                return [
+                    {"profile": {"email": "admin2@example.com"}},
+                    {"profile": {"email": "admin1@example.com"}},  # Duplicate
+                ]
+            return []
+
+        mock_okta_client.get_group_members_by_name.side_effect = get_group_members_side_effect
+
+        # Mock Grafana users
+        class MockResponse:
+            def json(self):
+                return [
+                    {"userId": 1, "email": "admin1@example.com", "isGrafanaAdmin": False},
+                    {"userId": 2, "email": "admin2@example.com", "isGrafanaAdmin": False},
+                ]
+
+        mock_grafana_client._get.return_value = MockResponse()
+
+        # Execute admin sync with multiple groups
+        admins_updated = sync_service.sync_admin_privileges(["Grafana-Admins", "Platform-Team"])
+
+        # Verify both groups were queried
+        assert mock_okta_client.get_group_members_by_name.call_count == 2
+
+        # Verify both users granted admin (no duplicates)
+        assert admins_updated == 2
+        assert mock_grafana_client.set_user_admin_permission.call_count == 2
+
+    def test_sync_admin_privileges_dry_run(
+        self,
+        sync_service_dry_run: SyncService,
+        mock_okta_client: Mock,
+        mock_grafana_client: Mock,
+    ) -> None:
+        """Test admin privilege sync in dry-run mode."""
+        # Setup Okta admin group
+        mock_okta_client.get_group_members_by_name.return_value = [
+            {"profile": {"email": "admin@example.com"}}
+        ]
+
+        # Mock Grafana users
+        class MockResponse:
+            def json(self):
+                return [{"userId": 1, "email": "admin@example.com", "isGrafanaAdmin": False}]
+
+        mock_grafana_client._get.return_value = MockResponse()
+
+        # Execute admin sync in dry-run mode
+        admins_updated = sync_service_dry_run.sync_admin_privileges(["Grafana-Admins"])
+
+        # Verify result counted but no actual changes made
+        assert admins_updated == 1
+        mock_grafana_client.set_user_admin_permission.assert_not_called()

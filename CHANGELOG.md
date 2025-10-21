@@ -76,5 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated configuration to support metrics (MetricsConfig dataclass)
 - Docker Compose configuration updated to expose metrics port 8000
 - Overall test coverage increased to 99% (138 tests, 620 statements, 9 missed)
+- Support for syncing Grafana admin privileges based on Okta groups
+- Configuration option for admin_groups array to specify Okta groups for Grafana admin access
+- Automatic grant/revoke of isGrafanaAdmin permission based on Okta group membership
+- Support for multiple admin groups with automatic deduplication
+- PUT endpoint support in Grafana client for admin permission updates
+- Admin privilege sync method in sync service with dry-run support
+- Comprehensive test suite for admin privilege functionality (7 new tests)
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD

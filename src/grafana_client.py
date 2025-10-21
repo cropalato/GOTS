@@ -1,4 +1,5 @@
 """Grafana API client for team and user management."""
+
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -128,6 +129,54 @@ class GrafanaClient:
         wait=wait_exponential(multiplier=1, min=2, max=60),
         stop=stop_after_attempt(5),
     )
+    def _patch(
+        self, endpoint: str, json_data: Optional[Dict[str, Any]] = None
+    ) -> requests.Response:
+        """
+        Make PATCH request to Grafana API with retry logic.
+
+        Args:
+            endpoint: API endpoint
+            json_data: JSON body data
+
+        Returns:
+            HTTP response object
+        """
+        url = f"{self.base_url}{endpoint}"
+        logger.debug("PATCH %s data=%s", url, json_data)
+
+        response = self.session.patch(url, json=json_data, timeout=30)
+        self._handle_response(response)
+        return response
+
+    @retry(
+        retry=retry_if_exception_type(requests.RequestException),
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        stop=stop_after_attempt(5),
+    )
+    def _put(self, endpoint: str, json_data: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """
+        Make PUT request to Grafana API with retry logic.
+
+        Args:
+            endpoint: API endpoint
+            json_data: JSON body data
+
+        Returns:
+            HTTP response object
+        """
+        url = f"{self.base_url}{endpoint}"
+        logger.debug("PUT %s data=%s", url, json_data)
+
+        response = self.session.put(url, json=json_data, timeout=30)
+        self._handle_response(response)
+        return response
+
+    @retry(
+        retry=retry_if_exception_type(requests.RequestException),
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        stop=stop_after_attempt(5),
+    )
     def _delete(self, endpoint: str) -> requests.Response:
         """
         Make DELETE request to Grafana API with retry logic.
@@ -155,7 +204,7 @@ class GrafanaClient:
         Returns:
             Team object with 'id', 'name', 'email', etc., or None if not found
         """
-        logger.info("Searching for Grafana team: %s", team_name)
+        logger.debug("Searching for Grafana team: %s", team_name)
 
         response = self._get("/api/teams/search", params={"name": team_name})
         teams = response.json()
@@ -244,21 +293,44 @@ class GrafanaClient:
         """
         Get Grafana user by email.
 
+        Uses /api/org/users endpoint instead of /api/users/lookup to work
+        with service accounts that have org.users:read but not users:read permission.
+
         Args:
             email: User email address
 
         Returns:
             User object with 'id', 'email', 'login', etc., or None if not found
         """
-        logger.info("Searching for Grafana user: %s", email)
+        logger.debug("Searching for Grafana user: %s", email)
 
         try:
-            response = self._get("/api/users/lookup", params={"loginOrEmail": email})
-            user = response.json()
-            logger.info("Found Grafana user: %s (ID: %s)", email, user["id"])
-            return user  # type: ignore[no-any-return]
-        except GrafanaNotFoundError:
-            logger.info("Grafana user not found: %s", email)
+            # Use org/users endpoint which requires org.users:read permission
+            # instead of /api/users/lookup which requires users:read
+            response = self._get("/api/org/users")
+            users = response.json()
+
+            # Search for user by email
+            for user in users:
+                if user.get("email", "").lower() == email.lower():
+                    logger.debug("Found Grafana user: %s (ID: %s)", email, user["userId"])
+                    # Normalize the response to match the expected format
+                    # org/users returns 'userId' while users/lookup returns 'id'
+                    normalized_user = {
+                        "id": user["userId"],
+                        "email": user["email"],
+                        "login": user["login"],
+                        "name": user.get("name", ""),
+                        "orgId": user.get("orgId"),
+                        "role": user.get("role", "Viewer"),
+                        "isDisabled": user.get("isDisabled", False),
+                    }
+                    return normalized_user  # type: ignore[no-any-return]
+
+            logger.debug("Grafana user not found: %s", email)
+            return None
+        except (GrafanaNotFoundError, GrafanaAuthenticationError):
+            logger.debug("Grafana user not found: %s", email)
             return None
 
     def create_user(
@@ -354,4 +426,54 @@ class GrafanaClient:
         result = response.json()
 
         logger.info("Removed user %s from team %s", user_id, team_id)
+        return result  # type: ignore[no-any-return]
+
+    def update_user_role(self, user_id: int, role: str) -> Dict[str, Any]:
+        """
+        Update user's organization role.
+
+        Args:
+            user_id: Grafana user ID
+            role: New role (Admin, Editor, or Viewer)
+
+        Returns:
+            Result object with 'message'
+
+        Raises:
+            ValueError: If role is invalid
+        """
+        valid_roles = ["Admin", "Editor", "Viewer"]
+        if role not in valid_roles:
+            raise ValueError(f"Role must be one of {valid_roles}, got: {role}")
+
+        logger.info("Updating user %s role to %s", user_id, role)
+
+        data = {"role": role}
+        response = self._patch(f"/api/org/users/{user_id}", json_data=data)
+        result = response.json()
+
+        logger.info("Updated user %s role to %s", user_id, role)
+        return result  # type: ignore[no-any-return]
+
+    def set_user_admin_permission(self, user_id: int, is_admin: bool) -> Dict[str, Any]:
+        """
+        Set user's Grafana admin permission.
+
+        This grants or revokes full Grafana admin privileges (isGrafanaAdmin flag),
+        which is different from organization roles (Admin, Editor, Viewer).
+
+        Args:
+            user_id: Grafana user ID
+            is_admin: True to grant admin privileges, False to revoke
+
+        Returns:
+            Result object with 'message'
+        """
+        logger.info("Setting Grafana admin permission for user %s to %s", user_id, is_admin)
+
+        data = {"isGrafanaAdmin": is_admin}
+        response = self._put(f"/api/admin/users/{user_id}/permissions", json_data=data)
+        result = response.json()
+
+        logger.info("Set Grafana admin permission for user %s to %s", user_id, is_admin)
         return result  # type: ignore[no-any-return]

@@ -12,10 +12,20 @@ sync:
   mappings:
     - okta_group: "Engineering"
       grafana_team: "Engineers"
+      grafana_role: "Viewer"  # Optional: Admin, Editor, or Viewer (default)
     - okta_group: "DataScience"
       grafana_team: "Data Scientists"
+      grafana_role: "Editor"  # Grant Editor role to Data Science team
     - okta_group: "SRE"
       grafana_team: "SRE Team"
+      grafana_role: "Admin"  # Grant Admin role to SRE team
+
+  # Optional: Okta groups whose members should have Grafana admin privileges
+  # Users in these groups will be granted isGrafanaAdmin=true
+  # Users not in any of these groups will have admin privileges revoked
+  admin_groups:
+    - "Grafana-Admins"
+    - "Platform-Team"
 
 logging:
   level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL

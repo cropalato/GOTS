@@ -524,3 +524,53 @@ class TestGrafanaClient:
 
         result = grafana_client.create_team("NewTeam")
         assert result["teamId"] == 42
+
+    @responses.activate
+    def test_update_user_role_success(self, grafana_client: GrafanaClient) -> None:
+        """Test successful user role update."""
+        mock_response = {"message": "Organization user updated"}
+
+        responses.add(
+            responses.PATCH,
+            "https://grafana.example.com/api/org/users/123",
+            json=mock_response,
+            status=200,
+        )
+
+        result = grafana_client.update_user_role(user_id=123, role="Editor")
+        assert result["message"] == "Organization user updated"
+
+    def test_update_user_role_invalid_role(self, grafana_client: GrafanaClient) -> None:
+        """Test error when updating with invalid role."""
+        with pytest.raises(ValueError, match="Role must be one of"):
+            grafana_client.update_user_role(user_id=123, role="InvalidRole")
+
+    @responses.activate
+    def test_set_user_admin_permission_grant(self, grafana_client: GrafanaClient) -> None:
+        """Test granting Grafana admin permission."""
+        mock_response = {"message": "User permissions updated"}
+
+        responses.add(
+            responses.PUT,
+            "https://grafana.example.com/api/admin/users/123/permissions",
+            json=mock_response,
+            status=200,
+        )
+
+        result = grafana_client.set_user_admin_permission(user_id=123, is_admin=True)
+        assert result["message"] == "User permissions updated"
+
+    @responses.activate
+    def test_set_user_admin_permission_revoke(self, grafana_client: GrafanaClient) -> None:
+        """Test revoking Grafana admin permission."""
+        mock_response = {"message": "User permissions updated"}
+
+        responses.add(
+            responses.PUT,
+            "https://grafana.example.com/api/admin/users/123/permissions",
+            json=mock_response,
+            status=200,
+        )
+
+        result = grafana_client.set_user_admin_permission(user_id=123, is_admin=False)
+        assert result["message"] == "User permissions updated"

@@ -50,6 +50,7 @@ class GroupMapping:
 
     okta_group: str
     grafana_team: str
+    grafana_role: str = "Viewer"  # Admin, Editor, or Viewer
 
     def __post_init__(self) -> None:
         """Validate group mapping."""
@@ -57,6 +58,13 @@ class GroupMapping:
             raise ValueError("Okta group name is required")
         if not self.grafana_team:
             raise ValueError("Grafana team name is required")
+
+        # Validate and normalize role
+        valid_roles = ["Admin", "Editor", "Viewer"]
+        if self.grafana_role not in valid_roles:
+            raise ValueError(
+                f"grafana_role must be one of {valid_roles}, got: {self.grafana_role}"
+            )
 
 
 @dataclass
@@ -66,11 +74,14 @@ class SyncConfig:
     interval_seconds: int = 300
     dry_run: bool = False
     mappings: Optional[List[GroupMapping]] = None
+    admin_groups: Optional[List[str]] = None  # Okta groups for Grafana admin privileges
 
     def __post_init__(self) -> None:
         """Validate sync configuration."""
         if self.mappings is None:
             self.mappings = []
+        if self.admin_groups is None:
+            self.admin_groups = []
         if self.interval_seconds < 60:
             raise ValueError("Sync interval must be at least 60 seconds")
         if not self.mappings:
@@ -209,10 +220,18 @@ class ConfigLoader:
         mappings = []
         for mapping in sync_dict.get("mappings", []):
             mappings.append(
-                GroupMapping(okta_group=mapping["okta_group"], grafana_team=mapping["grafana_team"])
+                GroupMapping(
+                    okta_group=mapping["okta_group"],
+                    grafana_team=mapping["grafana_team"],
+                    grafana_role=mapping.get("grafana_role", "Viewer"),
+                )
             )
 
-        sync_config = SyncConfig(interval_seconds=interval, dry_run=dry_run, mappings=mappings)
+        admin_groups = sync_dict.get("admin_groups", [])
+
+        sync_config = SyncConfig(
+            interval_seconds=interval, dry_run=dry_run, mappings=mappings, admin_groups=admin_groups
+        )
 
         # Logging config
         logging_dict = config_dict.get("logging", {})

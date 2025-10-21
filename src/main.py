@@ -106,7 +106,13 @@ def print_banner(dry_run: bool) -> None:
         print()
 
 
-def run_sync(sync_service: SyncService, okta_group: str, grafana_team: str) -> None:
+def run_sync(
+    sync_service: SyncService,
+    okta_group: str,
+    grafana_team: str,
+    grafana_role: str,
+    desired_roles: dict,  # type: ignore[type-arg]
+) -> None:
     """
     Run a single sync operation.
 
@@ -114,13 +120,17 @@ def run_sync(sync_service: SyncService, okta_group: str, grafana_team: str) -> N
         sync_service: Initialized SyncService instance
         okta_group: Okta group name
         grafana_team: Grafana team name
+        grafana_role: Grafana organization role (Admin, Editor, or Viewer)
+        desired_roles: Shared dict tracking desired roles across all groups
 
     Raises:
         KeyboardInterrupt: Re-raised to allow graceful shutdown
     """
     try:
-        logging.info("Starting sync: %s -> %s", okta_group, grafana_team)
-        metrics = sync_service.sync_group_to_team(okta_group, grafana_team)
+        logging.info("Starting sync: %s -> %s (role: %s)", okta_group, grafana_team, grafana_role)
+        metrics = sync_service.sync_group_to_team(
+            okta_group, grafana_team, grafana_role, desired_roles
+        )
         logging.info(
             "Sync completed: +%d users, -%d users, %d errors, %.2fs",
             metrics.users_added,
@@ -168,6 +178,10 @@ def main() -> NoReturn:
         # SyncConfig.__post_init__ ensures mappings is never None
         assert config.sync.mappings is not None
         logging.info("Number of mappings: %d", len(config.sync.mappings))
+        if config.sync.admin_groups:
+            logging.info("Admin groups: %s", ", ".join(config.sync.admin_groups))
+        else:
+            logging.info("Admin groups: None configured")
 
         # Initialize API clients
         logging.info("Initializing API clients...")
@@ -205,10 +219,33 @@ def main() -> NoReturn:
             """Run all configured sync operations."""
             # SyncConfig.__post_init__ ensures mappings is never None
             assert config.sync.mappings is not None
+
+            # Track desired roles across all group mappings
+            desired_roles: dict = {}  # type: ignore[type-arg]
+
+            # Run all group syncs
             for mapping in config.sync.mappings:
                 if shutdown_requested:
                     break
-                run_sync(sync_service, mapping.okta_group, mapping.grafana_team)
+                run_sync(
+                    sync_service,
+                    mapping.okta_group,
+                    mapping.grafana_team,
+                    mapping.grafana_role,
+                    desired_roles,
+                )
+
+            # Update all user roles based on highest permission across all groups
+            if not shutdown_requested and desired_roles:
+                logging.info("Applying role updates for %d users...", len(desired_roles))
+                roles_updated = sync_service.update_user_roles(desired_roles)
+                logging.info("Role update completed: %d roles updated", roles_updated)
+
+            # Sync Grafana admin privileges based on admin groups
+            if not shutdown_requested and config.sync.admin_groups:
+                logging.info("Syncing Grafana admin privileges...")
+                admins_updated = sync_service.sync_admin_privileges(config.sync.admin_groups)
+                logging.info("Admin privilege sync completed: %d permissions updated", admins_updated)
 
         # Schedule periodic sync
         schedule.every(config.sync.interval_seconds).seconds.do(sync_job)

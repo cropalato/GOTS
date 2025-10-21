@@ -136,6 +136,20 @@ class TestSyncConfig:
         with pytest.raises(ValueError, match="At least one group mapping is required"):
             SyncConfig(interval_seconds=300)
 
+    def test_admin_groups(self) -> None:
+        """Test admin groups configuration."""
+        mappings = [GroupMapping(okta_group="Group1", grafana_team="Team1")]
+        admin_groups = ["Grafana-Admins", "Platform-Team"]
+        config = SyncConfig(mappings=mappings, admin_groups=admin_groups)
+        assert config.admin_groups == admin_groups
+        assert len(config.admin_groups) == 2
+
+    def test_admin_groups_default_empty(self) -> None:
+        """Test that admin_groups defaults to empty list."""
+        mappings = [GroupMapping(okta_group="Group1", grafana_team="Team1")]
+        config = SyncConfig(mappings=mappings)
+        assert config.admin_groups == []
+
 
 class TestLoggingConfig:
     """Test LoggingConfig dataclass."""
@@ -562,3 +576,69 @@ sync:
             del os.environ["METRICS_ENABLED"]
             del os.environ["METRICS_PORT"]
             del os.environ["METRICS_HOST"]
+
+    def test_admin_groups_from_yaml(self) -> None:
+        """Test loading admin groups from YAML."""
+        yaml_content = """
+okta:
+  domain: example.okta.com
+  api_token: test-token
+
+grafana:
+  url: https://grafana.example.com
+  api_key: test-key
+
+sync:
+  interval_seconds: 300
+  dry_run: false
+  mappings:
+    - okta_group: "Group1"
+      grafana_team: "Team1"
+  admin_groups:
+    - "Grafana-Admins"
+    - "Platform-Team"
+    - "SRE"
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            config_path = f.name
+
+        try:
+            config = ConfigLoader.load(config_path)
+            assert config.sync.admin_groups is not None
+            assert len(config.sync.admin_groups) == 3
+            assert "Grafana-Admins" in config.sync.admin_groups
+            assert "Platform-Team" in config.sync.admin_groups
+            assert "SRE" in config.sync.admin_groups
+        finally:
+            Path(config_path).unlink()
+
+    def test_admin_groups_empty_when_not_specified(self) -> None:
+        """Test that admin_groups defaults to empty list when not in YAML."""
+        yaml_content = """
+okta:
+  domain: example.okta.com
+  api_token: test-token
+
+grafana:
+  url: https://grafana.example.com
+  api_key: test-key
+
+sync:
+  interval_seconds: 300
+  dry_run: false
+  mappings:
+    - okta_group: "Group1"
+      grafana_team: "Team1"
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            config_path = f.name
+
+        try:
+            config = ConfigLoader.load(config_path)
+            assert config.sync.admin_groups == []
+        finally:
+            Path(config_path).unlink()
