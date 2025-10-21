@@ -11,6 +11,8 @@ A Python service that automatically synchronizes Okta group membership to Grafan
 - **Comprehensive Error Handling**: Retry logic with exponential backoff for transient failures
 - **Partial Failure Tolerance**: Continues syncing even if individual operations fail
 - **Structured Logging**: JSON or text format logging with configurable levels
+- **Prometheus Metrics**: Built-in metrics export for monitoring and alerting
+- **Health Checks**: HTTP endpoints for Kubernetes liveness/readiness probes
 - **Docker Support**: Containerized deployment with minimal image size (162MB)
 - **Graceful Shutdown**: Handles SIGTERM/SIGINT signals properly
 
@@ -23,6 +25,7 @@ A Python service that automatically synchronizes Okta group membership to Grafan
 - [Grafana Setup](#grafana-setup)
 - [Running the Service](#running-the-service)
 - [Docker Deployment](#docker-deployment)
+- [Monitoring & Observability](#monitoring--observability)
 - [How Sync Works](#how-sync-works)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
@@ -128,6 +131,9 @@ All configuration options can be set via environment variables:
 | `SYNC_DRY_RUN` | Dry-run mode (true/false) | No | false |
 | `LOG_LEVEL` | Logging level | No | INFO |
 | `LOG_FORMAT` | Log format (json/text) | No | json |
+| `METRICS_ENABLED` | Enable Prometheus metrics (true/false) | No | false |
+| `METRICS_PORT` | Metrics HTTP server port | No | 8000 |
+| `METRICS_HOST` | Metrics server bind address | No | 0.0.0.0 |
 
 ### Variable Expansion
 
@@ -309,6 +315,106 @@ docker logs -f gots
 - Final image size: **162MB**
 - Runs as non-root user (`syncuser`, UID 1000)
 - Config file location: `/app/config.yaml`
+
+## Monitoring & Observability
+
+GOTS includes comprehensive monitoring and observability features for production deployments.
+
+### Prometheus Metrics
+
+Enable Prometheus metrics export to track sync operations, errors, and performance:
+
+**Configuration:**
+
+```yaml
+metrics:
+  enabled: true      # Enable metrics export
+  port: 8000         # HTTP server port
+  host: 0.0.0.0      # Bind address
+```
+
+Or via environment variables:
+```bash
+METRICS_ENABLED=true
+METRICS_PORT=8000
+METRICS_HOST=0.0.0.0
+```
+
+**Exported Metrics:**
+
+- `gots_sync_duration_seconds` - Histogram of sync operation durations
+- `gots_users_added_total` - Counter of users added to Grafana teams
+- `gots_users_removed_total` - Counter of users removed from Grafana teams
+- `gots_sync_errors_total` - Counter of sync errors
+- `gots_last_sync_timestamp` - Timestamp of last sync completion
+- `gots_last_sync_success` - Success/failure status of last sync (1=success, 0=failure)
+
+All metrics include labels for `okta_group` and `grafana_team` to track per-mapping statistics.
+
+### Health Endpoints
+
+When metrics are enabled, GOTS exposes two HTTP endpoints:
+
+- **`/health`** - Health check endpoint (returns JSON status)
+- **`/metrics`** - Prometheus metrics endpoint (Prometheus text format)
+
+Access them at `http://localhost:8000/health` and `http://localhost:8000/metrics`.
+
+### Kubernetes Integration
+
+**Health Probes:**
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+```
+
+**Prometheus ServiceMonitor:**
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gots
+spec:
+  selector:
+    matchLabels:
+      app: gots
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+```
+
+### Production Monitoring
+
+For comprehensive production monitoring setup, see **[MONITORING.md](MONITORING.md)**, which includes:
+
+- Complete Prometheus alert rules (18 alerts for critical/warning/info scenarios)
+- AlertManager configuration with severity-based routing
+- Grafana dashboard recommendations with example queries
+- Troubleshooting runbooks for common issues
+- Best practices for alert management and SLO monitoring
+
+**Quick Links:**
+- [Prometheus Alert Rules](prometheus-alerts.yaml) - Production-ready alert definitions
+- [AlertManager Config Example](alertmanager-config-example.yaml) - Notification routing and templates
+- [Monitoring Guide](MONITORING.md) - Complete monitoring and alerting documentation
 
 ## How Sync Works
 
