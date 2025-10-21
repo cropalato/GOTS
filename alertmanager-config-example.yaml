@@ -1,0 +1,173 @@
+---
+# AlertManager Configuration Example for GOTS
+#
+# This configuration shows how to route GOTS alerts to different channels
+# based on severity and set up appropriate notification templates.
+
+global:
+  # SMTP settings for email notifications
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_from: 'alertmanager@example.com'
+  smtp_auth_username: 'alertmanager@example.com'
+  smtp_auth_password: 'your-password-here'
+  smtp_require_tls: true
+
+  # Slack webhook for critical alerts
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+# Templates for notification formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for organizing alerts
+route:
+  # Default receiver for all alerts
+  receiver: 'gots-default'
+
+  # Group alerts by these labels to reduce notification spam
+  group_by: ['alertname', 'component', 'severity']
+
+  # Wait before sending first notification (allows grouping)
+  group_wait: 30s
+
+  # Wait before sending notifications about new alerts in existing group
+  group_interval: 5m
+
+  # Wait before re-sending notification if alert is still firing
+  repeat_interval: 4h
+
+  # Sub-routes for different severities
+  routes:
+    # CRITICAL: Immediate notification, page on-call
+    - match:
+        severity: critical
+        component: gots
+      receiver: 'gots-critical'
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 30m
+      continue: true  # Also send to default
+
+    # WARNING: Notify team channel, less urgency
+    - match:
+        severity: warning
+        component: gots
+      receiver: 'gots-warning'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 4h
+
+    # INFO: Log only or low-priority channel
+    - match:
+        severity: info
+        component: gots
+      receiver: 'gots-info'
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 12h
+
+# Inhibition rules: suppress less severe alerts when critical fires
+inhibit_rules:
+  # If GOTSDown is firing, suppress all other GOTS alerts
+  - source_match:
+      alertname: 'GOTSDown'
+    target_match:
+      component: 'gots'
+    equal: ['pod', 'namespace']
+
+  # If GOTSAllSyncsFailing is firing, suppress individual mapping failures
+  - source_match:
+      alertname: 'GOTSAllSyncsFailing'
+    target_match:
+      alertname: 'GOTSMappingFailing'
+    equal: ['namespace']
+
+  # If GOTSNoSuccessfulSyncs is firing, suppress high error rate
+  - source_match:
+      alertname: 'GOTSNoSuccessfulSyncs'
+    target_match:
+      alertname: 'GOTSHighErrorRate'
+    equal: ['namespace']
+
+# Receiver configurations
+receivers:
+  # Default: Email to team
+  - name: 'gots-default'
+    email_configs:
+      - to: 'platform-team@example.com'
+        headers:
+          Subject: '[GOTS] {{ .GroupLabels.alertname }}'
+        html: |
+          {{ template "email.default.html" . }}
+
+  # Critical: PagerDuty + Slack + Email
+  - name: 'gots-critical'
+    pagerduty_configs:
+      - service_key: 'YOUR-PAGERDUTY-SERVICE-KEY'
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          summary: '{{ .CommonAnnotations.summary }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+
+    slack_configs:
+      - channel: '#alerts-critical'
+        color: 'danger'
+        title: ':rotating_light: CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Severity:* {{ .GroupLabels.severity }}
+          *Pod:* {{ .GroupLabels.pod }}
+          *Namespace:* {{ .GroupLabels.namespace }}
+
+          {{ .CommonAnnotations.description }}
+        actions:
+          - type: button
+            text: 'Runbook :green_book:'
+            url: '{{ .CommonAnnotations.runbook_url }}'
+          - type: button
+            text: 'Logs :mag:'
+            url: 'https://kibana.example.com/app/logs?query={{ .GroupLabels.pod }}'
+          - type: button
+            text: 'Grafana :chart_with_upwards_trend:'
+            url: 'https://grafana.example.com/d/gots-dashboard'
+
+    email_configs:
+      - to: 'platform-oncall@example.com'
+        headers:
+          Subject: '[CRITICAL] [GOTS] {{ .GroupLabels.alertname }}'
+          Priority: 'urgent'
+
+  # Warning: Slack only
+  - name: 'gots-warning'
+    slack_configs:
+      - channel: '#platform-alerts'
+        color: 'warning'
+        title: ':warning: WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Mapping:* {{ .GroupLabels.okta_group }} → {{ .GroupLabels.grafana_team }}
+
+          {{ .CommonAnnotations.description }}
+        actions:
+          - type: button
+            text: 'Runbook :green_book:'
+            url: '{{ .CommonAnnotations.runbook_url }}'
+          - type: button
+            text: 'View Metrics :chart_with_upwards_trend:'
+            url: 'https://grafana.example.com/d/gots-dashboard'
+
+  # Info: Log aggregation or low-priority channel
+  - name: 'gots-info'
+    slack_configs:
+      - channel: '#platform-info'
+        color: 'good'
+        title: ':information_source: INFO: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ .CommonAnnotations.summary }}
+        send_resolved: false  # Don't spam with resolved notifications
+
+# Notification templates
+# Place these in /etc/alertmanager/templates/gots.tmpl

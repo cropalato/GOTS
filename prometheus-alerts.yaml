@@ -1,0 +1,501 @@
+---
+# Prometheus Alert Rules for GOTS (Grafana-Okta Team Sync)
+#
+# Usage:
+#   1. Place this file in your Prometheus configuration directory
+#   2. Add to prometheus.yml:
+#      rule_files:
+#        - "prometheus-alerts.yaml"
+#   3. Configure AlertManager for notifications
+#
+# Metrics exported by GOTS:
+#   - gots_sync_duration_seconds (histogram)
+#   - gots_users_added_total (counter)
+#   - gots_users_removed_total (counter)
+#   - gots_sync_errors_total (counter)
+#   - gots_last_sync_timestamp (gauge)
+#   - gots_last_sync_success (gauge)
+
+groups:
+  - name: gots_critical
+    interval: 30s
+    rules:
+      # ============================================================================
+      # CRITICAL: Application completely down
+      # ============================================================================
+
+      - alert: GOTSDown
+        expr: up{job="gots"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: gots
+          alert_type: availability
+        annotations:
+          summary: "GOTS application is down"
+          description: |
+            GOTS pod is not responding to Prometheus scrapes.
+            Pod: {{ $labels.pod }}
+            Namespace: {{ $labels.namespace }}
+
+            IMMEDIATE ACTIONS:
+            1. Check pod status: kubectl get pods -n {{ $labels.namespace }} -l app=gots
+            2. Check pod logs: kubectl logs -n {{ $labels.namespace }} {{ $labels.pod }}
+            3. Check recent events: kubectl describe pod -n {{ $labels.namespace }} {{ $labels.pod }}
+            4. Verify ConfigMap and Secrets exist
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-GOTSDown
+
+      # ============================================================================
+      # CRITICAL: No successful syncs for extended period
+      # ============================================================================
+
+      - alert: GOTSNoSuccessfulSyncs
+        expr: |
+          (time() - max(gots_last_sync_timestamp{}) > 1800)
+          and
+          (sum(rate(gots_sync_errors_total[15m])) > 0 or vector(1))
+        for: 5m
+        labels:
+          severity: critical
+          component: gots
+          alert_type: functionality
+        annotations:
+          summary: "GOTS has not completed a successful sync in 30+ minutes"
+          description: |
+            No successful syncs have occurred in the last 30 minutes.
+            Last successful sync: {{ $value | humanizeDuration }} ago
+
+            This indicates a persistent issue preventing synchronization.
+
+            INVESTIGATION STEPS:
+            1. Check GOTS logs for errors: kubectl logs -n {{ $labels.namespace }} -l app=gots --tail=100
+            2. Verify Okta API connectivity and credentials
+            3. Verify Grafana API connectivity and credentials
+            4. Check for rate limiting from Okta or Grafana
+            5. Review recent configuration changes
+
+            IMPACT: User access to Grafana teams is out of sync with Okta groups!
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-NoSuccessfulSyncs
+
+      # ============================================================================
+      # CRITICAL: All syncs failing consistently
+      # ============================================================================
+
+      - alert: GOTSAllSyncsFailing
+        expr: |
+          sum(gots_last_sync_success{}) == 0
+          and
+          count(gots_last_sync_success{}) > 0
+        for: 10m
+        labels:
+          severity: critical
+          component: gots
+          alert_type: functionality
+        annotations:
+          summary: "All GOTS sync mappings are failing"
+          description: |
+            Every configured Okta-to-Grafana mapping is failing.
+            Failed mappings: {{ $value }}
+
+            This suggests a system-wide issue (not individual group problems).
+
+            LIKELY CAUSES:
+            - Okta API credentials invalid/expired
+            - Grafana API credentials invalid/expired
+            - Network connectivity issues
+            - API endpoints unreachable (firewall/DNS)
+
+            INVESTIGATION:
+            1. Test Okta API: curl -H "Authorization: SSWS $TOKEN" https://$DOMAIN/api/v1/groups
+            2. Test Grafana API: curl -H "Authorization: Bearer $TOKEN" $GRAFANA_URL/api/org
+            3. Check GOTS logs for authentication errors
+            4. Verify secrets are correctly mounted
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-AllSyncsFailing
+
+  - name: gots_warnings
+    interval: 1m
+    rules:
+      # ============================================================================
+      # WARNING: High error rate (but not all failing)
+      # ============================================================================
+
+      - alert: GOTSHighErrorRate
+        expr: |
+          (
+            sum(rate(gots_sync_errors_total[15m]))
+            /
+            (sum(rate(gots_users_added_total[15m])) + sum(rate(gots_users_removed_total[15m])) + 0.001)
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: reliability
+        annotations:
+          summary: "GOTS error rate is above 20%"
+          description: |
+            Error rate: {{ $value | humanizePercentage }}
+
+            More than 20% of sync operations are failing.
+            Some syncs may be succeeding, but reliability is degraded.
+
+            INVESTIGATION:
+            1. Check which mappings are failing:
+               - Query: gots_last_sync_success{} == 0
+            2. Look for patterns in logs (specific groups failing)
+            3. Check for rate limiting errors
+            4. Verify individual group configurations in Okta/Grafana
+
+            POSSIBLE CAUSES:
+            - Specific Okta groups don't exist or renamed
+            - Specific Grafana teams have permission issues
+            - Some users have invalid email addresses
+            - Partial rate limiting (not global)
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-HighErrorRate
+
+      # ============================================================================
+      # WARNING: Individual mapping consistently failing
+      # ============================================================================
+
+      - alert: GOTSMappingFailing
+        expr: |
+          gots_last_sync_success{} == 0
+        for: 30m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: functionality
+        annotations:
+          summary: "GOTS mapping {{ $labels.okta_group }} → {{ $labels.grafana_team }} is failing"
+          description: |
+            Specific mapping has failed for 30+ minutes:
+            Okta Group: {{ $labels.okta_group }}
+            Grafana Team: {{ $labels.grafana_team }}
+
+            Other mappings may be working fine.
+
+            INVESTIGATION:
+            1. Verify Okta group exists and name is correct (case-sensitive!)
+            2. Verify Grafana team exists or can be created
+            3. Check for empty Okta groups (might cause issues)
+            4. Review GOTS logs for this specific mapping
+            5. Test sync manually in dry-run mode
+
+            COMMON FIXES:
+            - Okta group was renamed → Update config.yaml
+            - Okta group was deleted → Remove mapping from config
+            - Grafana team permissions issue → Check API key permissions
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-MappingFailing
+
+      # ============================================================================
+      # WARNING: Sync duration increasing
+      # ============================================================================
+
+      - alert: GOTSSyncDurationHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(gots_sync_duration_seconds_bucket[15m])) by (le, okta_group, grafana_team)
+          ) > 120
+        for: 15m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: performance
+        annotations:
+          summary: "GOTS sync duration is unusually high"
+          description: |
+            95th percentile sync duration: {{ $value | humanizeDuration }}
+            Mapping: {{ $labels.okta_group }} → {{ $labels.grafana_team }}
+
+            Syncs are taking longer than expected (>2 minutes).
+
+            POSSIBLE CAUSES:
+            - Very large Okta group (thousands of members)
+            - Very large Grafana team
+            - Okta API rate limiting (slower responses)
+            - Grafana API rate limiting
+            - Network latency increased
+
+            INVESTIGATION:
+            1. Check group size: How many members?
+            2. Review API response times in logs
+            3. Check for rate limit headers in logs
+            4. Monitor network latency to Okta/Grafana
+
+            MITIGATION:
+            - Consider increasing sync interval if groups are large
+            - Check if pagination is working correctly
+            - Verify retry backoff isn't being triggered excessively
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-SyncDurationHigh
+
+      # ============================================================================
+      # WARNING: Unusual sync activity (too many changes)
+      # ============================================================================
+
+      - alert: GOTSUnusualSyncActivity
+        expr: |
+          (
+            sum(rate(gots_users_added_total[5m])) +
+            sum(rate(gots_users_removed_total[5m]))
+          ) > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: anomaly
+        annotations:
+          summary: "GOTS is processing an unusually high number of user changes"
+          description: |
+            User changes per minute: {{ $value | humanize }}
+
+            This could indicate:
+            - Large organizational change in Okta
+            - Configuration change (new mapping added)
+            - Initial sync after deployment
+            - Potential configuration error causing thrashing
+
+            INVESTIGATION:
+            1. Review recent Okta group changes
+            2. Check for new GOTS configuration deployments
+            3. Verify sync is idempotent (not adding/removing same users repeatedly)
+            4. Check logs for repeated operations on same users
+
+            ACTION REQUIRED:
+            - If expected: Acknowledge and monitor
+            - If unexpected: Investigate for configuration errors
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-UnusualActivity
+
+      # ============================================================================
+      # WARNING: Metrics endpoint not responding
+      # ============================================================================
+
+      - alert: GOTSMetricsEndpointDown
+        expr: |
+          up{job="gots"} == 1
+          and
+          (time() - gots_last_sync_timestamp{} > 7200)
+        for: 5m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: monitoring
+        annotations:
+          summary: "GOTS metrics appear stale"
+          description: |
+            Pod is up but metrics haven't updated in 2+ hours.
+            Last update: {{ $value | humanizeDuration }} ago
+
+            Possible issues:
+            - Sync scheduler stopped working
+            - Application deadlocked (but health check still responding)
+            - Metrics collection broken
+
+            INVESTIGATION:
+            1. Check if application is actually running syncs (review logs)
+            2. Verify schedule library is working
+            3. Check for goroutine/thread deadlocks
+            4. Review CPU/memory usage for resource starvation
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-MetricsStale
+
+  - name: gots_info
+    interval: 5m
+    rules:
+      # ============================================================================
+      # INFO: Sync completed with some errors (partial success)
+      # ============================================================================
+
+      - alert: GOTSPartialSyncFailure
+        expr: |
+          sum(increase(gots_sync_errors_total[5m])) > 0
+          and
+          sum(gots_last_sync_success{}) > 0
+        for: 15m
+        labels:
+          severity: info
+          component: gots
+          alert_type: partial_failure
+        annotations:
+          summary: "GOTS is experiencing partial sync failures"
+          description: |
+            Some individual user operations are failing, but overall sync is working.
+            Errors in last 5 minutes: {{ $value }}
+
+            This is usually not critical - could be individual user issues.
+
+            COMMON CAUSES:
+            - Individual users have invalid email addresses
+            - Individual users don't exist in Grafana (can't be created)
+            - Temporary permission issues for specific users
+
+            INVESTIGATION:
+            1. Review logs for specific error messages
+            2. Identify which users are failing
+            3. Validate user email addresses in Okta
+            4. Check Grafana user creation permissions
+
+            ACTION: Monitor, investigate if persistent
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-PartialFailure
+
+      # ============================================================================
+      # INFO: No activity (might be expected)
+      # ============================================================================
+
+      - alert: GOTSNoSyncActivity
+        expr: |
+          (
+            sum(rate(gots_users_added_total[30m])) +
+            sum(rate(gots_users_removed_total[30m]))
+          ) == 0
+        for: 6h
+        labels:
+          severity: info
+          component: gots
+          alert_type: inactivity
+        annotations:
+          summary: "GOTS has not synced any users in 6 hours"
+          description: |
+            No users have been added or removed in 6 hours.
+
+            This could be normal if:
+            - Organization is stable (no group membership changes)
+            - All groups are already in sync
+
+            Or could indicate:
+            - Sync is running but making no changes (check logs)
+            - Application is stuck
+            - No Okta group changes occurring
+
+            ACTION: Verify this is expected behavior
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-NoActivity
+
+      # ============================================================================
+      # INFO: Rate limiting detected
+      # ============================================================================
+
+      - alert: GOTSRateLimitDetected
+        expr: |
+          sum(rate(gots_sync_duration_seconds_count[10m])) < 0.8 * sum(rate(gots_sync_duration_seconds_count[1h] offset 1h))
+        for: 20m
+        labels:
+          severity: info
+          component: gots
+          alert_type: rate_limit
+        annotations:
+          summary: "GOTS may be experiencing API rate limiting"
+          description: |
+            Sync operations are completing more slowly than usual.
+            Current rate: {{ $value | humanize }} syncs/min
+
+            This could indicate rate limiting from Okta or Grafana.
+
+            INVESTIGATION:
+            1. Check logs for rate limit error messages (429 responses)
+            2. Review Okta API rate limit headers in logs
+            3. Check Grafana API rate limits
+            4. Verify retry backoff is working as expected
+
+            MITIGATION:
+            - Increase sync interval if hitting limits regularly
+            - Contact Okta/Grafana support to increase limits
+            - Optimize: reduce number of API calls if possible
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-RateLimiting
+
+  - name: gots_resource_usage
+    interval: 1m
+    rules:
+      # ============================================================================
+      # WARNING: High memory usage
+      # ============================================================================
+
+      - alert: GOTSHighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{pod=~"gots-.*"}
+            /
+            container_spec_memory_limit_bytes{pod=~"gots-.*"}
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: resources
+        annotations:
+          summary: "GOTS is using {{ $value | humanizePercentage }} of memory limit"
+          description: |
+            Pod: {{ $labels.pod }}
+            Memory usage is high and approaching limit.
+
+            INVESTIGATION:
+            1. Check if syncing very large groups
+            2. Look for memory leaks (usage always increasing?)
+            3. Review recent code changes
+
+            MITIGATION:
+            - Increase memory limits if justified
+            - Investigate memory leak if present
+            - Optimize code for large groups
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-HighMemory
+
+      # ============================================================================
+      # WARNING: High CPU usage
+      # ============================================================================
+
+      - alert: GOTSHighCPUUsage
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{pod=~"gots-.*"}[5m])
+            /
+            container_spec_cpu_quota{pod=~"gots-.*"} * 100000
+          ) > 0.80
+        for: 15m
+        labels:
+          severity: warning
+          component: gots
+          alert_type: resources
+        annotations:
+          summary: "GOTS is using {{ $value | humanizePercentage }} of CPU limit"
+          description: |
+            Pod: {{ $labels.pod }}
+            CPU usage is consistently high.
+
+            CAUSES:
+            - Processing very large groups
+            - Inefficient operations
+            - Stuck in retry loops
+
+            INVESTIGATION:
+            1. Profile the application
+            2. Check for infinite loops or retry storms
+            3. Review sync duration metrics
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-HighCPU
+
+      # ============================================================================
+      # CRITICAL: Pod restarting frequently
+      # ============================================================================
+
+      - alert: GOTSFrequentRestarts
+        expr: |
+          rate(kube_pod_container_status_restarts_total{pod=~"gots-.*"}[1h]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: gots
+          alert_type: stability
+        annotations:
+          summary: "GOTS pod is restarting frequently"
+          description: |
+            Pod: {{ $labels.pod }}
+            Restart rate: {{ $value | humanize }} restarts/hour
+
+            INVESTIGATION:
+            1. Check pod events: kubectl describe pod {{ $labels.pod }}
+            2. Check previous logs: kubectl logs {{ $labels.pod }} --previous
+            3. Look for OOMKilled, CrashLoopBackOff
+            4. Review liveness probe failures
+
+            COMMON CAUSES:
+            - Application crash/panic
+            - OOMKilled (insufficient memory)
+            - Liveness probe failing incorrectly
+            - Configuration errors causing startup failures
+          runbook_url: https://github.com/cropalato/gots/wiki/Runbook-FrequentRestarts
