@@ -281,6 +281,7 @@ class TestMain:
             okta_client=mock_okta_client,
             grafana_client=mock_grafana_client,
             dry_run=True,
+            metrics_collector=None,
         )
 
         # Verify signal handlers were registered

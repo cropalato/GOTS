@@ -5,17 +5,20 @@ import logging
 import signal
 import sys
 import time
-from typing import NoReturn
+from typing import NoReturn, Optional
 
 import schedule
 
 from src.config import ConfigLoader
 from src.grafana_client import GrafanaClient
+from src.metrics_server import MetricsCollector, MetricsServer
 from src.okta_client import OktaClient
 from src.sync_service import SyncService
 
 # Global flag for graceful shutdown
 shutdown_requested = False
+# Global metrics server for graceful shutdown
+metrics_server: Optional[MetricsServer] = None
 
 
 def setup_logging(log_level: str, log_format: str) -> None:
@@ -171,11 +174,26 @@ def main() -> NoReturn:
         okta_client = OktaClient(config.okta.domain, config.okta.api_token)
         grafana_client = GrafanaClient(config.grafana.url, config.grafana.api_key)
 
+        # Initialize metrics if enabled
+        metrics_collector = None
+        global metrics_server  # pylint: disable=global-statement
+        assert config.metrics is not None
+        if config.metrics.enabled:
+            logging.info("Metrics enabled, starting metrics server...")
+            metrics_collector = MetricsCollector()
+            metrics_server = MetricsServer(
+                metrics_collector, port=config.metrics.port, host=config.metrics.host
+            )
+            metrics_server.start()
+        else:
+            logging.info("Metrics disabled")
+
         # Initialize sync service
         sync_service = SyncService(
             okta_client=okta_client,
             grafana_client=grafana_client,
             dry_run=config.sync.dry_run,
+            metrics_collector=metrics_collector,
         )
 
         # Setup signal handlers for graceful shutdown
@@ -210,6 +228,8 @@ def main() -> NoReturn:
             time.sleep(1)
 
         # Graceful shutdown
+        if metrics_server:
+            metrics_server.stop()
         logging.info("Shutdown complete. Goodbye!")
         sys.exit(0)
 

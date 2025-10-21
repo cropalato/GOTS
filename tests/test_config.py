@@ -11,6 +11,7 @@ from src.config import (
     GrafanaConfig,
     GroupMapping,
     LoggingConfig,
+    MetricsConfig,
     OktaConfig,
     SyncConfig,
 )
@@ -178,6 +179,41 @@ class TestLoggingConfig:
             assert config.level == level
 
 
+class TestMetricsConfig:
+    """Test MetricsConfig dataclass."""
+
+    def test_default_config(self) -> None:
+        """Test default metrics configuration."""
+        config = MetricsConfig()
+        assert config.enabled is False
+        assert config.port == 8000
+        assert config.host == "0.0.0.0"
+
+    def test_valid_config(self) -> None:
+        """Test valid metrics configuration."""
+        config = MetricsConfig(enabled=True, port=9090, host="127.0.0.1")
+        assert config.enabled is True
+        assert config.port == 9090
+        assert config.host == "127.0.0.1"
+
+    def test_invalid_port_too_low(self) -> None:
+        """Test error with port number too low."""
+        with pytest.raises(ValueError, match="Metrics port must be between 1 and 65535"):
+            MetricsConfig(port=0)
+
+    def test_invalid_port_too_high(self) -> None:
+        """Test error with port number too high."""
+        with pytest.raises(ValueError, match="Metrics port must be between 1 and 65535"):
+            MetricsConfig(port=65536)
+
+    def test_valid_port_boundaries(self) -> None:
+        """Test valid port boundaries."""
+        config1 = MetricsConfig(port=1)
+        assert config1.port == 1
+        config2 = MetricsConfig(port=65535)
+        assert config2.port == 65535
+
+
 class TestConfig:
     """Test Config dataclass."""
 
@@ -204,6 +240,19 @@ class TestConfig:
         assert config.logging is not None
         assert config.logging.level == "INFO"
         assert config.logging.format == "json"
+
+    def test_default_metrics_config(self) -> None:
+        """Test that metrics config is set to default if not provided."""
+        okta = OktaConfig(domain="example.okta.com", api_token="token")
+        grafana = GrafanaConfig(url="https://grafana.example.com", api_key="key")
+        mappings = [GroupMapping(okta_group="Group1", grafana_team="Team1")]
+        sync = SyncConfig(mappings=mappings)
+
+        config = Config(okta=okta, grafana=grafana, sync=sync)
+        assert config.metrics is not None
+        assert config.metrics.enabled is False
+        assert config.metrics.port == 8000
+        assert config.metrics.host == "0.0.0.0"
 
 
 class TestConfigLoader:
@@ -438,3 +487,78 @@ sync:
         finally:
             Path(config_path).unlink()
             del os.environ["SYNC_INTERVAL_SECONDS"]
+
+    def test_metrics_from_yaml(self) -> None:
+        """Test loading metrics configuration from YAML."""
+        yaml_content = """
+okta:
+  domain: example.okta.com
+  api_token: test-token
+
+grafana:
+  url: https://grafana.example.com
+  api_key: test-key
+
+sync:
+  interval_seconds: 300
+  dry_run: false
+  mappings:
+    - okta_group: "Group1"
+      grafana_team: "Team1"
+
+metrics:
+  enabled: true
+  port: 9090
+  host: 127.0.0.1
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            config_path = f.name
+
+        try:
+            config = ConfigLoader.load(config_path)
+            assert config.metrics is not None
+            assert config.metrics.enabled is True
+            assert config.metrics.port == 9090
+            assert config.metrics.host == "127.0.0.1"
+        finally:
+            Path(config_path).unlink()
+
+    def test_metrics_from_env(self) -> None:
+        """Test loading metrics configuration from environment variables."""
+        os.environ["METRICS_ENABLED"] = "true"
+        os.environ["METRICS_PORT"] = "9999"
+        os.environ["METRICS_HOST"] = "localhost"
+
+        yaml_content = """
+okta:
+  domain: example.okta.com
+  api_token: test-token
+
+grafana:
+  url: https://grafana.example.com
+  api_key: test-key
+
+sync:
+  interval_seconds: 300
+  dry_run: false
+  mappings:
+    - okta_group: "Group1"
+      grafana_team: "Team1"
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            config_path = f.name
+
+        try:
+            config = ConfigLoader.load(config_path)
+            assert config.metrics.enabled is True
+            assert config.metrics.port == 9999
+            assert config.metrics.host == "localhost"
+        finally:
+            Path(config_path).unlink()
+            del os.environ["METRICS_ENABLED"]
+            del os.environ["METRICS_PORT"]
+            del os.environ["METRICS_HOST"]

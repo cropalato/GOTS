@@ -23,9 +23,18 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
 
+      # Metrics Configuration (optional)
+      - METRICS_ENABLED=${METRICS_ENABLED:-false}
+      - METRICS_PORT=${METRICS_PORT:-8000}
+      - METRICS_HOST=${METRICS_HOST:-0.0.0.0}
+
       # SSL/TLS Configuration (optional)
       # Uncomment if you need to provide a custom CA certificate
       # - REQUESTS_CA_BUNDLE=/app/certs/ca-certificates.crt
+
+    # Expose metrics port (optional, only if metrics are enabled)
+    ports:
+      - "8000:8000"  # Metrics and health check endpoint
 
     # Mount config.yaml from host (optional - can use env vars instead)
     volumes:

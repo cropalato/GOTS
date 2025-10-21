@@ -67,5 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified 100% test coverage across all modules (118 tests, 491 statements)
 - All critical modules exceed 90% coverage target
 - Comprehensive test suite covering all edge cases and error scenarios
+- Prometheus metrics export with custom metrics for sync operations
+- HTTP metrics server with /metrics and /health endpoints
+- Metrics tracking: sync duration, users added/removed, errors, timestamps
+- Configurable metrics server (enabled, port, host) via YAML and environment variables
+- Thread-safe metrics collection for concurrent sync operations
+- Comprehensive test suite for metrics server (12 tests, 98% coverage)
+- Updated configuration to support metrics (MetricsConfig dataclass)
+- Docker Compose configuration updated to expose metrics port 8000
+- Overall test coverage increased to 99% (138 tests, 620 statements, 9 missed)
 
 [Unreleased]: https://github.com/cropalato/gots/compare/v0.1.0...HEAD

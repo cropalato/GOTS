@@ -2,10 +2,13 @@
 import logging
 import time
 from dataclasses import dataclass
-from typing import Set
+from typing import TYPE_CHECKING, Optional, Set
 
 from src.grafana_client import GrafanaClient
 from src.okta_client import OktaClient
+
+if TYPE_CHECKING:
+    from src.metrics_server import MetricsCollector
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +27,11 @@ class SyncService:
     """Service for synchronizing Okta groups to Grafana teams."""
 
     def __init__(
-        self, okta_client: OktaClient, grafana_client: GrafanaClient, dry_run: bool = False
+        self,
+        okta_client: OktaClient,
+        grafana_client: GrafanaClient,
+        dry_run: bool = False,
+        metrics_collector: Optional["MetricsCollector"] = None,
     ) -> None:
         """
         Initialize sync service.
@@ -33,10 +40,12 @@ class SyncService:
             okta_client: Okta API client
             grafana_client: Grafana API client
             dry_run: If True, log actions without executing them
+            metrics_collector: Optional metrics collector for monitoring
         """
         self.okta_client = okta_client
         self.grafana_client = grafana_client
         self.dry_run = dry_run
+        self.metrics_collector = metrics_collector
 
     def sync_group_to_team(  # pylint: disable=too-many-locals
         self, okta_group_name: str, grafana_team_name: str
@@ -55,6 +64,10 @@ class SyncService:
         metrics = SyncMetrics()
 
         logger.info("Starting sync: %s -> %s", okta_group_name, grafana_team_name)
+
+        # Record metrics start
+        if self.metrics_collector:
+            self.metrics_collector.record_sync_start(okta_group_name, grafana_team_name)
 
         try:
             # Fetch Okta group members
@@ -140,5 +153,16 @@ class SyncService:
                 metrics.users_removed,
                 metrics.errors,
             )
+
+            # Record metrics completion
+            if self.metrics_collector:
+                self.metrics_collector.record_sync_complete(
+                    okta_group_name,
+                    grafana_team_name,
+                    metrics.duration_seconds,
+                    metrics.users_added,
+                    metrics.users_removed,
+                    metrics.errors,
+                )
 
         return metrics

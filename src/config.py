@@ -98,6 +98,20 @@ class LoggingConfig:
 
 
 @dataclass
+class MetricsConfig:
+    """Metrics server configuration."""
+
+    enabled: bool = False
+    port: int = 8000
+    host: str = "0.0.0.0"
+
+    def __post_init__(self) -> None:
+        """Validate metrics configuration."""
+        if self.port < 1 or self.port > 65535:
+            raise ValueError("Metrics port must be between 1 and 65535")
+
+
+@dataclass
 class Config:
     """Main configuration class."""
 
@@ -105,11 +119,14 @@ class Config:
     grafana: GrafanaConfig
     sync: SyncConfig
     logging: Optional[LoggingConfig] = None
+    metrics: Optional[MetricsConfig] = None
 
     def __post_init__(self) -> None:
         """Set defaults."""
         if self.logging is None:
             self.logging = LoggingConfig()
+        if self.metrics is None:
+            self.metrics = MetricsConfig()
 
 
 class ConfigLoader:
@@ -204,9 +221,21 @@ class ConfigLoader:
             format=os.getenv("LOG_FORMAT", logging_dict.get("format", "json")),
         )
 
+        # Metrics config
+        metrics_dict = config_dict.get("metrics", {})
+        metrics_enabled = (
+            os.getenv("METRICS_ENABLED", str(metrics_dict.get("enabled", False))).lower() == "true"
+        )
+        metrics_port = int(os.getenv("METRICS_PORT", metrics_dict.get("port", 8000)))
+        metrics_host = os.getenv("METRICS_HOST", metrics_dict.get("host", "0.0.0.0"))
+        metrics_config = MetricsConfig(
+            enabled=metrics_enabled, port=metrics_port, host=metrics_host
+        )
+
         return Config(
             okta=okta_config,
             grafana=grafana_config,
             sync=sync_config,
             logging=logging_config,
+            metrics=metrics_config,
         )
