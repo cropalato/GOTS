@@ -1,0 +1,12 @@
+apiVersion: v2
+name: gots
+description: Grafana-Okta Team Sync - Synchronizes Okta groups to Grafana teams
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+keywords:
+  - grafana
+  - okta
+  - sync
+maintainers:
+  - name: cropalato

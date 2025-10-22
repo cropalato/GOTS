@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gots.fullname" . }}
+  labels:
+    {{- include "gots.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    okta:
+      domain: {{ .Values.okta.domain | quote }}
+      api_token: ${OKTA_API_TOKEN}
+
+    grafana:
+      url: {{ .Values.grafana.url | quote }}
+      api_key: ${GRAFANA_API_KEY}
+
+    sync:
+      interval_seconds: {{ .Values.sync.intervalSeconds }}
+      dry_run: {{ .Values.sync.dryRun }}
+      {{- if .Values.sync.admin_groups }}
+      admin_groups:
+        {{- range .Values.sync.admin_groups }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      mappings:
+        {{- range .Values.sync.mappings }}
+        - okta_group: {{ .okta_group | quote }}
+          grafana_team: {{ .grafana_team | quote }}
+        {{- end }}

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Helm chart for Kubernetes deployment (helm/gots/)
+- ConfigMap template for application configuration
+- Secret template for sensitive API tokens
+- Deployment template with configurable resources and environment variables
+- Support for extra environment variables via extraEnv parameter
+- Automatic pod restart on configuration or secret changes
+- Helm chart documentation with installation and configuration examples
+
 ## [0.2.0] - 2025-10-21
 
 ### Added

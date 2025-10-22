@@ -1,0 +1,69 @@
+# Default values for gots
+
+image:
+  repository: cropalato/gots
+  pullPolicy: Always  # Use Always for latest tag to ensure newest image is pulled
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Resources allocation
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Restart policy for the deployment
+restartPolicy: Always
+
+# Node selector for pod assignment
+nodeSelector: {}
+
+# Tolerations for pod assignment
+tolerations: []
+
+# Affinity for pod assignment
+affinity: {}
+
+# Extra environment variables to add to the container
+extraEnv: []
+# Example:
+# - name: LOG_LEVEL
+#   value: "DEBUG"
+# - name: CUSTOM_VAR
+#   value: "custom-value"
+# - name: SECRET_VAR
+#   valueFrom:
+#     secretKeyRef:
+#       name: my-secret
+#       key: my-key
+
+# Okta configuration
+okta:
+  domain: ""  # e.g., "company.okta.com"
+  apiToken: ""  # Okta API token (will be stored in Secret)
+
+# Grafana configuration
+grafana:
+  url: ""  # e.g., "https://grafana.company.com"
+  apiKey: ""  # Grafana API key (will be stored in Secret)
+
+# Sync configuration
+sync:
+  intervalSeconds: 3600  # Sync every hour
+  dryRun: false
+  # admin_groups: []  # Optional: Okta groups that grant Grafana admin privileges
+  # Example:
+  # - "Grafana-Admins"
+  # - "Platform-Team"
+  mappings: []
+  # Example mappings:
+  # - okta_group: "Engineering"
+  #   grafana_team: "Engineering"
+  # - okta_group: "DevOps"
+  #   grafana_team: "DevOps"
