@@ -41,6 +41,7 @@ class OktaOAuthTokenManager:
         client_secret: Optional[str] = None,
         private_key_path: Optional[str] = None,
         token_endpoint_auth_method: str = "client_secret_basic",
+        jwt_key_id: Optional[str] = None,
     ) -> None:
         """
         Initialize OAuth token manager.
@@ -52,6 +53,8 @@ class OktaOAuthTokenManager:
             client_secret: OAuth client secret (for client_secret_* methods)
             private_key_path: Path to private key PEM file (for private_key_jwt)
             token_endpoint_auth_method: Authentication method (client_secret_basic, private_key_jwt)
+            jwt_key_id: Optional JWT Key ID (kid) for private_key_jwt. If not provided,
+                       kid header will be omitted and Okta will match by signature.
         """
         self.domain = domain.replace("https://", "").replace("http://", "")
         self.token_url = f"https://{self.domain}/oauth2/v1/token"
@@ -59,6 +62,7 @@ class OktaOAuthTokenManager:
         self.client_secret = client_secret
         self.private_key_path = private_key_path
         self.token_endpoint_auth_method = token_endpoint_auth_method
+        self.jwt_key_id = jwt_key_id
         self.scopes = scopes
         self._access_token: Optional[str] = None
         self._token_expiry: Optional[float] = None
@@ -137,12 +141,18 @@ class OktaOAuthTokenManager:
             "jti": str(uuid.uuid4()),  # JWT ID: unique identifier
         }
 
-        # Sign the JWT with RS256 algorithm and include kid in header
-        headers = {
-            "kid": "eadE2YW30tucVX8l61Re-cNXAfeQVxq9U_LJ6SXpW00",  # Key ID from Okta JWKSet
+        # Sign the JWT with RS256 algorithm
+        # Only include kid header if explicitly configured
+        headers: Dict[str, str] = {
             "alg": "RS256",
             "typ": "JWT",
         }
+        if self.jwt_key_id:
+            headers["kid"] = self.jwt_key_id
+            logger.debug("Using JWT Key ID (kid): %s", self.jwt_key_id)
+        else:
+            logger.debug("No kid specified - Okta will match by signature")
+
         assertion = jwt.encode(claims, self._private_key, algorithm="RS256", headers=headers)
 
         logger.debug("Created client assertion JWT for %s", self.client_id)

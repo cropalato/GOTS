@@ -2,8 +2,8 @@ apiVersion: v2
 name: gots
 description: Grafana-Okta Team Sync - Synchronizes Okta groups to Grafana teams
 type: application
-version: 0.3.0
-appVersion: "0.3.0"
+version: 0.3.1
+appVersion: "0.3.1"
 keywords:
   - grafana
   - okta

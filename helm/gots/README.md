@@ -115,6 +115,8 @@ okta:
     #   -----BEGIN PRIVATE KEY-----
     #   MIIEvQIBADANBgkqhkiG9w0BAQEFAASCB...
     #   -----END PRIVATE KEY-----
+    # Optional: JWT Key ID (kid) - only needed if you have multiple keys
+    # jwtKeyId: "eadE2YW30tucVX8l61Re-cNXAfeQVxq9U_LJ6SXpW00"
     scopes:
       - okta.groups.read
       - okta.users.read
@@ -169,6 +171,7 @@ helm install gots ./helm/gots -f values.yaml
 | `okta.oauth.privateKey` | Private key PEM content (for private_key_jwt) | `""` |
 | `okta.oauth.privateKeySecretName` | Name of existing secret containing private key | `""` |
 | `okta.oauth.privateKeySecretKey` | Key in the private key secret | `private.pem` |
+| `okta.oauth.jwtKeyId` | Optional JWT Key ID (kid) for private_key_jwt. If not specified, Okta matches by signature | `""` |
 | `okta.oauth.scopes` | OAuth scopes | `["okta.groups.read", "okta.users.read"]` |
 | **Grafana Configuration** | | |
 | `grafana.url` | Grafana URL | `""` |
@@ -312,7 +315,11 @@ okta:
   oauth:
     privateKeySecretName: "gots-private-key"
     privateKeySecretKey: "private.pem"
+    # Optional: Only needed if you have multiple public keys registered in Okta
+    # jwtKeyId: "eadE2YW30tucVX8l61Re-cNXAfeQVxq9U_LJ6SXpW00"
 ```
+
+**Note about `jwtKeyId`**: This parameter is optional and only needed if you have multiple public keys registered in your Okta OAuth application. If not specified, Okta will automatically match the public key by verifying the JWT signature. This is the recommended approach for most deployments.
 
 ### OAuth Setup Checklist
 

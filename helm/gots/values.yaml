@@ -67,6 +67,10 @@ okta:
     privateKeySecretName: ""  # Name of existing secret containing private key
     privateKeySecretKey: "private.pem"  # Key in the secret
 
+    # Optional: JWT Key ID (kid) for private_key_jwt method
+    # If not specified, Okta will match the public key by signature verification
+    jwtKeyId: ""  # e.g., "eadE2YW30tucVX8l61Re-cNXAfeQVxq9U_LJ6SXpW00"
+
     scopes:
       - okta.groups.read
       - okta.users.read

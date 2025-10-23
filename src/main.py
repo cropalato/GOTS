@@ -197,6 +197,7 @@ def main() -> NoReturn:
                 client_secret=config.okta.oauth.client_secret,
                 private_key_path=config.okta.oauth.private_key_path,
                 token_endpoint_auth_method=config.okta.oauth.token_endpoint_auth_method,
+                jwt_key_id=config.okta.oauth.jwt_key_id,
             )
             okta_client = OktaClient(
                 domain=config.okta.domain, oauth_token_manager=oauth_token_manager

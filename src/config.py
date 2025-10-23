@@ -18,6 +18,7 @@ class OktaOAuthConfig:
     client_secret: Optional[str] = None  # For client_secret_basic/post methods
     private_key_path: Optional[str] = None  # For private_key_jwt method
     token_endpoint_auth_method: str = "client_secret_basic"  # or "private_key_jwt"
+    jwt_key_id: Optional[str] = None  # Optional JWT Key ID (kid) for private_key_jwt
 
     def __post_init__(self) -> None:
         """Validate OAuth configuration."""
@@ -265,6 +266,7 @@ class ConfigLoader:
                 "OKTA_TOKEN_ENDPOINT_AUTH_METHOD",
                 oauth_dict.get("token_endpoint_auth_method", "client_secret_basic"),
             )
+            jwt_key_id = os.getenv("OKTA_JWT_KEY_ID", oauth_dict.get("jwt_key_id", ""))
 
             # Parse scopes - can be comma-separated string from env or list from YAML
             scopes_env = os.getenv("OKTA_SCOPES", "")
@@ -276,6 +278,7 @@ class ConfigLoader:
             # Convert empty strings to None for optional fields
             client_secret = client_secret if client_secret else None
             private_key_path = private_key_path if private_key_path else None
+            jwt_key_id = jwt_key_id if jwt_key_id else None
 
             oauth_config = OktaOAuthConfig(
                 client_id=client_id,
@@ -283,6 +286,7 @@ class ConfigLoader:
                 private_key_path=private_key_path,
                 token_endpoint_auth_method=token_endpoint_auth_method,
                 scopes=scopes,
+                jwt_key_id=jwt_key_id,
             )
 
         # Get api_token, convert empty string to None for optional field

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "grafana-okta-team-sync"
-version = "0.3.0"
+version = "0.3.1"
 description = "Service to sync Okta group membership to Grafana teams"
 authors = ["Your Name <your.email@example.com>"]
 license = "MIT"

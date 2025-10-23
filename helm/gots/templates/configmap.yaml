@@ -22,6 +22,9 @@ data:
         {{- if or .Values.okta.oauth.privateKey .Values.okta.oauth.privateKeySecretName }}
         private_key_path: ${OKTA_PRIVATE_KEY_PATH}
         {{- end }}
+        {{- if .Values.okta.oauth.jwtKeyId }}
+        jwt_key_id: ${OKTA_JWT_KEY_ID}
+        {{- end }}
         scopes:
           {{- range .Values.okta.oauth.scopes }}
           - {{ . | quote }}

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2025-10-23
+
+### Fixed
+- Hardcoded JWT Key ID (kid) in OAuth token manager - now configurable via `jwt_key_id` parameter
+- JWT kid parameter is now optional and can be omitted to let Okta match by signature verification
+
+### Added
+- Configuration parameter `jwt_key_id` in OktaOAuthConfig for optional JWT Key ID specification
+- Helm chart support for `jwtKeyId` parameter in values.yaml
+- Documentation for `jwt_key_id` in config.example.yaml, .env.example, and Helm README
+- Environment variable `OKTA_JWT_KEY_ID` for JWT Key ID configuration
+
 ## [0.3.0] - 2025-10-23
 
 ### Added
@@ -135,6 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin privilege sync method in sync service with dry-run support
 - Comprehensive test suite for admin privilege functionality (7 new tests)
 
-[Unreleased]: https://github.com/cropalato/gots/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/cropalato/gots/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/cropalato/gots/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/cropalato/gots/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cropalato/gots/compare/v0.1.0...v0.2.0

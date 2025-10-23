@@ -19,6 +19,10 @@ okta:
   #   # For private_key_jwt (required by some Okta orgs):
   #   private_key_path: ${OKTA_PRIVATE_KEY_PATH}  # Path to private.pem
   #
+  #   # Optional: JWT Key ID (kid) for JWT header when using private_key_jwt
+  #   # If not specified, Okta will match the public key by signature verification
+  #   # jwt_key_id: ${OKTA_JWT_KEY_ID}
+  #
   #   scopes:
   #     - okta.groups.read
   #     - okta.users.read
