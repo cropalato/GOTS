@@ -10,20 +10,69 @@ from dotenv import load_dotenv
 
 
 @dataclass
+class OktaOAuthConfig:
+    """Okta OAuth 2.0 configuration."""
+
+    client_id: str
+    scopes: List[str]
+    client_secret: Optional[str] = None  # For client_secret_basic/post methods
+    private_key_path: Optional[str] = None  # For private_key_jwt method
+    token_endpoint_auth_method: str = "client_secret_basic"  # or "private_key_jwt"
+
+    def __post_init__(self) -> None:
+        """Validate OAuth configuration."""
+        if not self.client_id:
+            raise ValueError("OAuth client_id is required")
+        if not self.scopes:
+            raise ValueError("At least one OAuth scope is required")
+
+        # Validate auth method and required credentials
+        valid_methods = ["client_secret_basic", "client_secret_post", "private_key_jwt"]
+        if self.token_endpoint_auth_method not in valid_methods:
+            raise ValueError(
+                f"token_endpoint_auth_method must be one of {valid_methods}, "
+                f"got: {self.token_endpoint_auth_method}"
+            )
+
+        if self.token_endpoint_auth_method in ["client_secret_basic", "client_secret_post"]:
+            if not self.client_secret:
+                raise ValueError(f"client_secret is required for {self.token_endpoint_auth_method}")
+        elif self.token_endpoint_auth_method == "private_key_jwt":
+            if not self.private_key_path:
+                raise ValueError("private_key_path is required for private_key_jwt")
+
+
+@dataclass
 class OktaConfig:
     """Okta API configuration."""
 
     domain: str
-    api_token: str
+    auth_method: str = "api_token"  # "api_token" or "oauth"
+    api_token: Optional[str] = None
+    oauth: Optional[OktaOAuthConfig] = None
 
     def __post_init__(self) -> None:
         """Validate Okta configuration."""
         if not self.domain:
             raise ValueError("Okta domain is required")
-        if not self.api_token:
-            raise ValueError("Okta API token is required")
+
         # Remove protocol if present
         self.domain = self.domain.replace("https://", "").replace("http://", "")
+
+        # Validate auth method
+        valid_auth_methods = ["api_token", "oauth"]
+        if self.auth_method not in valid_auth_methods:
+            raise ValueError(
+                f"auth_method must be one of {valid_auth_methods}, got: {self.auth_method}"
+            )
+
+        # Validate credentials based on auth method
+        if self.auth_method == "api_token":
+            if not self.api_token:
+                raise ValueError("Okta API token is required when using api_token auth method")
+        elif self.auth_method == "oauth":
+            if not self.oauth:
+                raise ValueError("OAuth configuration is required when using oauth auth method")
 
 
 @dataclass
@@ -62,9 +111,7 @@ class GroupMapping:
         # Validate and normalize role
         valid_roles = ["Admin", "Editor", "Viewer"]
         if self.grafana_role not in valid_roles:
-            raise ValueError(
-                f"grafana_role must be one of {valid_roles}, got: {self.grafana_role}"
-            )
+            raise ValueError(f"grafana_role must be one of {valid_roles}, got: {self.grafana_role}")
 
 
 @dataclass
@@ -202,9 +249,51 @@ class ConfigLoader:
             config_dict = ConfigLoader._expand_env_vars(config_dict)
 
         # Override with environment variables
+        okta_dict = config_dict.get("okta", {})
+        auth_method = os.getenv("OKTA_AUTH_METHOD", okta_dict.get("auth_method", "api_token"))
+
+        # Build OAuth config if using oauth auth method
+        oauth_config = None
+        if auth_method == "oauth":
+            oauth_dict = okta_dict.get("oauth", {})
+            client_id = os.getenv("OKTA_CLIENT_ID", oauth_dict.get("client_id", ""))
+            client_secret = os.getenv("OKTA_CLIENT_SECRET", oauth_dict.get("client_secret", ""))
+            private_key_path = os.getenv(
+                "OKTA_PRIVATE_KEY_PATH", oauth_dict.get("private_key_path", "")
+            )
+            token_endpoint_auth_method = os.getenv(
+                "OKTA_TOKEN_ENDPOINT_AUTH_METHOD",
+                oauth_dict.get("token_endpoint_auth_method", "client_secret_basic"),
+            )
+
+            # Parse scopes - can be comma-separated string from env or list from YAML
+            scopes_env = os.getenv("OKTA_SCOPES", "")
+            if scopes_env:
+                scopes = [s.strip() for s in scopes_env.split(",")]
+            else:
+                scopes = oauth_dict.get("scopes", [])
+
+            # Convert empty strings to None for optional fields
+            client_secret = client_secret if client_secret else None
+            private_key_path = private_key_path if private_key_path else None
+
+            oauth_config = OktaOAuthConfig(
+                client_id=client_id,
+                client_secret=client_secret,
+                private_key_path=private_key_path,
+                token_endpoint_auth_method=token_endpoint_auth_method,
+                scopes=scopes,
+            )
+
+        # Get api_token, convert empty string to None for optional field
+        api_token_value = os.getenv("OKTA_API_TOKEN", okta_dict.get("api_token", ""))
+        api_token = api_token_value if api_token_value else None
+
         okta_config = OktaConfig(
-            domain=os.getenv("OKTA_DOMAIN", config_dict.get("okta", {}).get("domain", "")),
-            api_token=os.getenv("OKTA_API_TOKEN", config_dict.get("okta", {}).get("api_token", "")),
+            domain=os.getenv("OKTA_DOMAIN", okta_dict.get("domain", "")),
+            auth_method=auth_method,
+            api_token=api_token,
+            oauth=oauth_config,
         )
 
         grafana_config = GrafanaConfig(

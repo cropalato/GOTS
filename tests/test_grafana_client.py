@@ -276,33 +276,39 @@ class TestGrafanaClient:
     @responses.activate
     def test_get_user_by_email_success(self, grafana_client: GrafanaClient) -> None:
         """Test successful user lookup."""
-        mock_response = {
-            "id": 123,
-            "email": "user@example.com",
-            "login": "user",
-            "name": "Test User",
-        }
+        # Mock /api/org/users endpoint (returns list of org users)
+        mock_response = [
+            {
+                "userId": 123,
+                "email": "user@example.com",
+                "login": "user",
+                "name": "Test User",
+                "orgId": 1,
+                "role": "Editor",
+            }
+        ]
 
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
+            "https://grafana.example.com/api/org/users",
             json=mock_response,
             status=200,
         )
 
         user = grafana_client.get_user_by_email("user@example.com")
         assert user is not None
-        assert user["id"] == 123
+        assert user["id"] == 123  # Normalized from userId
         assert user["email"] == "user@example.com"
 
     @responses.activate
     def test_get_user_by_email_not_found(self, grafana_client: GrafanaClient) -> None:
         """Test user not found."""
+        # Return empty list when user doesn't exist
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
-            json={"message": "User not found"},
-            status=404,
+            "https://grafana.example.com/api/org/users",
+            json=[],
+            status=200,
         )
 
         user = grafana_client.get_user_by_email("nonexistent@example.com")
@@ -356,11 +362,14 @@ class TestGrafanaClient:
     @responses.activate
     def test_get_or_create_user_existing(self, grafana_client: GrafanaClient) -> None:
         """Test get_or_create_user when user exists."""
-        mock_response = {"id": 123, "email": "user@example.com", "login": "user"}
+        # Mock org/users endpoint
+        mock_response = [
+            {"userId": 123, "email": "user@example.com", "login": "user", "role": "Viewer"}
+        ]
 
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
+            "https://grafana.example.com/api/org/users",
             json=mock_response,
             status=200,
         )
@@ -371,12 +380,12 @@ class TestGrafanaClient:
     @responses.activate
     def test_get_or_create_user_new(self, grafana_client: GrafanaClient) -> None:
         """Test get_or_create_user when user doesn't exist."""
-        # First call: user not found
+        # First call: user not found (empty list)
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
-            json={"message": "User not found"},
-            status=404,
+            "https://grafana.example.com/api/org/users",
+            json=[],
+            status=200,
         )
 
         # Second call: create user
@@ -387,11 +396,18 @@ class TestGrafanaClient:
             status=200,
         )
 
-        # Third call: get created user
+        # Third call: get created user (now exists)
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
-            json={"id": 456, "email": "newuser@example.com", "login": "newuser"},
+            "https://grafana.example.com/api/org/users",
+            json=[
+                {
+                    "userId": 456,
+                    "email": "newuser@example.com",
+                    "login": "newuser",
+                    "role": "Viewer",
+                }
+            ],
             status=200,
         )
 
@@ -401,12 +417,12 @@ class TestGrafanaClient:
     @responses.activate
     def test_get_or_create_user_creation_failed(self, grafana_client: GrafanaClient) -> None:
         """Test get_or_create_user when creation succeeds but retrieval fails."""
-        # First call: user not found
+        # First call: user not found (empty list)
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
-            json={"message": "User not found"},
-            status=404,
+            "https://grafana.example.com/api/org/users",
+            json=[],
+            status=200,
         )
 
         # Second call: create user
@@ -417,12 +433,12 @@ class TestGrafanaClient:
             status=200,
         )
 
-        # Third call: failed to retrieve created user
+        # Third call: failed to retrieve created user (still empty list)
         responses.add(
             responses.GET,
-            "https://grafana.example.com/api/users/lookup",
-            json={"message": "User not found"},
-            status=404,
+            "https://grafana.example.com/api/org/users",
+            json=[],
+            status=200,
         )
 
         with pytest.raises(GrafanaAPIError, match="Failed to retrieve created user"):

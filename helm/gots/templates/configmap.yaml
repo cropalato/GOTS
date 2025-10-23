@@ -8,7 +8,25 @@ data:
   config.yaml: |
     okta:
       domain: {{ .Values.okta.domain | quote }}
+      {{- if eq .Values.okta.authMethod "api_token" }}
+      auth_method: api_token
       api_token: ${OKTA_API_TOKEN}
+      {{- else if eq .Values.okta.authMethod "oauth" }}
+      auth_method: oauth
+      oauth:
+        client_id: ${OKTA_CLIENT_ID}
+        {{- if .Values.okta.oauth.clientSecret }}
+        client_secret: ${OKTA_CLIENT_SECRET}
+        {{- end }}
+        token_endpoint_auth_method: {{ .Values.okta.oauth.tokenEndpointAuthMethod | quote }}
+        {{- if or .Values.okta.oauth.privateKey .Values.okta.oauth.privateKeySecretName }}
+        private_key_path: ${OKTA_PRIVATE_KEY_PATH}
+        {{- end }}
+        scopes:
+          {{- range .Values.okta.oauth.scopes }}
+          - {{ . | quote }}
+          {{- end }}
+      {{- end }}
 
     grafana:
       url: {{ .Values.grafana.url | quote }}

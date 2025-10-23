@@ -124,7 +124,11 @@ All configuration options can be set via environment variables:
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `OKTA_DOMAIN` | Okta domain (without https://) | Yes | - |
-| `OKTA_API_TOKEN` | Okta API token | Yes | - |
+| `OKTA_AUTH_METHOD` | Okta auth method (api_token or oauth) | No | api_token |
+| `OKTA_API_TOKEN` | Okta API token (for api_token method) | Conditional | - |
+| `OKTA_CLIENT_ID` | OAuth client ID (for oauth method) | Conditional | - |
+| `OKTA_CLIENT_SECRET` | OAuth client secret (for oauth method) | Conditional | - |
+| `OKTA_SCOPES` | OAuth scopes, comma-separated (for oauth method) | Conditional | - |
 | `GRAFANA_URL` | Grafana server URL | Yes | - |
 | `GRAFANA_API_KEY` | Grafana API key | Yes | - |
 | `SYNC_INTERVAL_SECONDS` | Sync frequency in seconds | No | 300 |
@@ -147,23 +151,104 @@ okta:
 
 ## Okta Setup
 
-### 1. Create an API Token
+GOTS supports two authentication methods for connecting to Okta: **API Token** (default) and **OAuth 2.0** (recommended for production). Choose the method that best fits your security requirements.
+
+### Authentication Methods
+
+#### Option 1: API Token Authentication (Default)
+
+Simple setup using an API token. Suitable for testing and smaller deployments.
+
+**Steps:**
 
 1. Log into your Okta Admin Console
 2. Navigate to **Security** → **API** → **Tokens**
 3. Click **Create Token**
 4. Name it (e.g., "Grafana Team Sync")
 5. Copy the token immediately (it won't be shown again)
-6. Set `OKTA_API_TOKEN` to this value
+6. Set `OKTA_API_TOKEN` to this value in your `.env` file
 
-### 2. Find Your Okta Domain
+**Configuration:**
+```yaml
+okta:
+  domain: ${OKTA_DOMAIN}
+  auth_method: api_token  # Default
+  api_token: ${OKTA_API_TOKEN}
+```
+
+#### Option 2: OAuth 2.0 Authentication (Recommended)
+
+More secure with automatic token rotation. Recommended for production environments.
+
+**Benefits:**
+- Short-lived access tokens (automatically refreshed)
+- Better security posture with granular scopes
+- No need for manual token rotation
+- Appears in Okta audit logs as OAuth app activity
+
+**Steps:**
+
+1. **Create OAuth 2.0 Application in Okta:**
+   - Log into Okta Admin Console
+   - Navigate to **Applications** → **Applications**
+   - Click **Create App Integration**
+   - Select **API Services** (for M2M communication)
+   - Name it (e.g., "Grafana Team Sync OAuth")
+   - Click **Save**
+
+2. **Note Client Credentials:**
+   - Copy the **Client ID**
+   - Copy the **Client Secret** (shown only once)
+   - Set `OKTA_CLIENT_ID` and `OKTA_CLIENT_SECRET` in your `.env` file
+
+3. **Grant Required Scopes:**
+   - In the Okta Admin Console, go to **Security** → **API** → **Authorization Servers**
+   - Select your authorization server (usually "default")
+   - Go to the **Scopes** tab
+   - Ensure these scopes exist (create if needed):
+     - `okta.groups.read` - Read group information
+     - `okta.users.read` - Read user information
+   - Navigate to **Applications** → Your OAuth app → **Okta API Scopes**
+   - Grant the following scopes:
+     - `okta.groups.read`
+     - `okta.users.read`
+
+4. **Assign Admin Role (Critical!):**
+   - In the same OAuth application, go to the **Admin Roles** tab
+   - Click **Add Role** or **Grant**
+   - Select **Group Administrator** (recommended for least privilege)
+   - Click **Save**
+   - **Note**: This step is required! Scopes alone are not sufficient for OAuth for Okta. See [OKTA_ADMIN_ROLE_SETUP.md](OKTA_ADMIN_ROLE_SETUP.md) for details.
+
+**Configuration:**
+```yaml
+okta:
+  domain: ${OKTA_DOMAIN}
+  auth_method: oauth
+  oauth:
+    client_id: ${OKTA_CLIENT_ID}
+    client_secret: ${OKTA_CLIENT_SECRET}
+    scopes:
+      - okta.groups.read
+      - okta.users.read
+```
+
+**Environment Variables:**
+```bash
+OKTA_AUTH_METHOD=oauth
+OKTA_CLIENT_ID=your-client-id-here
+OKTA_CLIENT_SECRET=your-client-secret-here
+OKTA_SCOPES=okta.groups.read,okta.users.read
+```
+
+### Find Your Okta Domain
 
 Your Okta domain is the subdomain in your Okta URL:
 - If your Okta URL is `https://company.okta.com`
 - Your domain is `company.okta.com`
 - Set `OKTA_DOMAIN=company.okta.com`
 
-### 3. Find Group Names
+### Find Group Names
 
 1. In Okta Admin Console, go to **Directory** → **Groups**
 2. Find the groups you want to sync
@@ -172,7 +257,13 @@ Your Okta domain is the subdomain in your Okta URL:
 
 ### Required Permissions
 
-The API token needs **read-only** access to groups and users. The default token permissions are sufficient.
+**API Token Method:**
+- The API token needs **read-only** access to groups and users
+- Default token permissions are sufficient
+
+**OAuth Method:**
+- Requires `okta.groups.read` and `okta.users.read` scopes
+- Scopes must be granted to the OAuth application
 
 ## Grafana Setup
 

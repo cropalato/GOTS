@@ -46,7 +46,30 @@ extraEnv: []
 # Okta configuration
 okta:
   domain: ""  # e.g., "company.okta.com"
+
+  # Authentication method: "api_token" or "oauth"
+  authMethod: "api_token"
+
+  # API Token authentication (when authMethod = "api_token")
   apiToken: ""  # Okta API token (will be stored in Secret)
+
+  # OAuth 2.0 authentication (when authMethod = "oauth")
+  oauth:
+    clientId: ""  # OAuth client ID
+    tokenEndpointAuthMethod: "client_secret_basic"  # or "private_key_jwt"
+
+    # For client_secret_* methods
+    clientSecret: ""  # OAuth client secret (will be stored in Secret)
+
+    # For private_key_jwt method
+    privateKey: ""  # Private key PEM content (will be stored in Secret)
+    # Alternatively, use privateKeySecretName to reference an existing secret
+    privateKeySecretName: ""  # Name of existing secret containing private key
+    privateKeySecretKey: "private.pem"  # Key in the secret
+
+    scopes:
+      - okta.groups.read
+      - okta.users.read
 
 # Grafana configuration
 grafana:
