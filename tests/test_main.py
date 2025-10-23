@@ -278,7 +278,9 @@ class TestMain:
         assert exc_info.value.code == 0
 
         # Verify clients were initialized
-        mock_okta_client_class.assert_called_once_with(domain="test.okta.com", api_token="test-token")
+        mock_okta_client_class.assert_called_once_with(
+            domain="test.okta.com", api_token="test-token"
+        )
         mock_grafana_client_class.assert_called_once_with("https://grafana.test", "test-key")
 
         # Verify sync service was created

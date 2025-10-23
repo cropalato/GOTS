@@ -400,7 +400,14 @@ class TestGrafanaClient:
         responses.add(
             responses.GET,
             "https://grafana.example.com/api/org/users",
-            json=[{"userId": 456, "email": "newuser@example.com", "login": "newuser", "role": "Viewer"}],
+            json=[
+                {
+                    "userId": 456,
+                    "email": "newuser@example.com",
+                    "login": "newuser",
+                    "role": "Viewer",
+                }
+            ],
             status=200,
         )
 
