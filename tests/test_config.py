@@ -13,18 +13,62 @@ from src.config import (
     LoggingConfig,
     MetricsConfig,
     OktaConfig,
+    OktaOAuthConfig,
     SyncConfig,
 )
+
+
+class TestOktaOAuthConfig:
+    """Test OktaOAuthConfig dataclass."""
+
+    def test_valid_config(self) -> None:
+        """Test valid OAuth configuration."""
+        config = OktaOAuthConfig(
+            client_id="test-client-id",
+            client_secret="test-secret",
+            scopes=["okta.groups.read", "okta.users.read"],
+        )
+        assert config.client_id == "test-client-id"
+        assert config.client_secret == "test-secret"
+        assert config.scopes == ["okta.groups.read", "okta.users.read"]
+
+    def test_missing_client_id(self) -> None:
+        """Test error when client_id is missing."""
+        with pytest.raises(ValueError, match="OAuth client_id is required"):
+            OktaOAuthConfig(client_id="", client_secret="secret", scopes=["okta.groups.read"])
+
+    def test_missing_client_secret(self) -> None:
+        """Test error when client_secret is missing."""
+        with pytest.raises(ValueError, match="OAuth client_secret is required"):
+            OktaOAuthConfig(client_id="id", client_secret="", scopes=["okta.groups.read"])
+
+    def test_missing_scopes(self) -> None:
+        """Test error when scopes list is empty."""
+        with pytest.raises(ValueError, match="At least one OAuth scope is required"):
+            OktaOAuthConfig(client_id="id", client_secret="secret", scopes=[])
 
 
 class TestOktaConfig:
     """Test OktaConfig dataclass."""
 
-    def test_valid_config(self) -> None:
-        """Test valid Okta configuration."""
+    def test_valid_config_with_api_token(self) -> None:
+        """Test valid Okta configuration with API token."""
         config = OktaConfig(domain="example.okta.com", api_token="test-token")
         assert config.domain == "example.okta.com"
         assert config.api_token == "test-token"
+        assert config.auth_method == "api_token"
+        assert config.oauth is None
+
+    def test_valid_config_with_oauth(self) -> None:
+        """Test valid Okta configuration with OAuth."""
+        oauth = OktaOAuthConfig(
+            client_id="id", client_secret="secret", scopes=["okta.groups.read"]
+        )
+        config = OktaConfig(domain="example.okta.com", auth_method="oauth", oauth=oauth)
+        assert config.domain == "example.okta.com"
+        assert config.auth_method == "oauth"
+        assert config.oauth == oauth
+        assert config.api_token is None
 
     def test_removes_https_from_domain(self) -> None:
         """Test that https:// is stripped from domain."""
@@ -41,10 +85,20 @@ class TestOktaConfig:
         with pytest.raises(ValueError, match="Okta domain is required"):
             OktaConfig(domain="", api_token="token")
 
-    def test_missing_token(self) -> None:
-        """Test error when API token is missing."""
-        with pytest.raises(ValueError, match="Okta API token is required"):
-            OktaConfig(domain="example.okta.com", api_token="")
+    def test_invalid_auth_method(self) -> None:
+        """Test error when auth_method is invalid."""
+        with pytest.raises(ValueError, match="auth_method must be one of"):
+            OktaConfig(domain="example.okta.com", auth_method="invalid", api_token="token")
+
+    def test_missing_api_token_when_using_api_token_method(self) -> None:
+        """Test error when API token is missing for api_token auth method."""
+        with pytest.raises(ValueError, match="Okta API token is required when using api_token auth method"):
+            OktaConfig(domain="example.okta.com", auth_method="api_token")
+
+    def test_missing_oauth_when_using_oauth_method(self) -> None:
+        """Test error when OAuth config is missing for oauth auth method."""
+        with pytest.raises(ValueError, match="OAuth configuration is required when using oauth auth method"):
+            OktaConfig(domain="example.okta.com", auth_method="oauth")
 
 
 class TestGrafanaConfig:
@@ -642,3 +696,84 @@ sync:
             assert config.sync.admin_groups == []
         finally:
             Path(config_path).unlink()
+
+    def test_load_oauth_config_from_yaml(self) -> None:
+        """Test loading OAuth configuration from YAML."""
+        yaml_content = """
+okta:
+  domain: example.okta.com
+  auth_method: oauth
+  oauth:
+    client_id: test-client-id
+    client_secret: test-secret
+    scopes:
+      - okta.groups.read
+      - okta.users.read
+
+grafana:
+  url: https://grafana.example.com
+  api_key: test-key
+
+sync:
+  interval_seconds: 300
+  dry_run: false
+  mappings:
+    - okta_group: "Group1"
+      grafana_team: "Team1"
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            config_path = f.name
+
+        try:
+            config = ConfigLoader.load(config_path)
+            assert config.okta.auth_method == "oauth"
+            assert config.okta.oauth is not None
+            assert config.okta.oauth.client_id == "test-client-id"
+            assert config.okta.oauth.client_secret == "test-secret"
+            assert config.okta.oauth.scopes == ["okta.groups.read", "okta.users.read"]
+            assert config.okta.api_token is None
+        finally:
+            Path(config_path).unlink()
+
+    def test_load_oauth_config_from_env(self) -> None:
+        """Test loading OAuth configuration from environment variables."""
+        os.environ["OKTA_AUTH_METHOD"] = "oauth"
+        os.environ["OKTA_CLIENT_ID"] = "env-client-id"
+        os.environ["OKTA_CLIENT_SECRET"] = "env-secret"
+        os.environ["OKTA_SCOPES"] = "okta.groups.read,okta.users.read"
+
+        yaml_content = """
+okta:
+  domain: example.okta.com
+
+grafana:
+  url: https://grafana.example.com
+  api_key: test-key
+
+sync:
+  interval_seconds: 300
+  dry_run: false
+  mappings:
+    - okta_group: "Group1"
+      grafana_team: "Team1"
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            config_path = f.name
+
+        try:
+            config = ConfigLoader.load(config_path)
+            assert config.okta.auth_method == "oauth"
+            assert config.okta.oauth is not None
+            assert config.okta.oauth.client_id == "env-client-id"
+            assert config.okta.oauth.client_secret == "env-secret"
+            assert config.okta.oauth.scopes == ["okta.groups.read", "okta.users.read"]
+        finally:
+            Path(config_path).unlink()
+            del os.environ["OKTA_AUTH_METHOD"]
+            del os.environ["OKTA_CLIENT_ID"]
+            del os.environ["OKTA_CLIENT_SECRET"]
+            del os.environ["OKTA_SCOPES"]

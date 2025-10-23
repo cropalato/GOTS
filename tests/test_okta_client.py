@@ -1,4 +1,7 @@
 """Tests for Okta API client."""
+import time
+from unittest import mock
+
 import pytest
 import responses
 from tenacity import RetryError
@@ -8,6 +11,7 @@ from src.okta_client import (
     OktaAuthenticationError,
     OktaClient,
     OktaNotFoundError,
+    OktaOAuthTokenManager,
     OktaRateLimitError,
 )
 
@@ -35,8 +39,9 @@ class TestOktaClient:
 
     def test_session_headers(self, okta_client: OktaClient) -> None:
         """Test that session has correct headers."""
-        assert okta_client.session.headers["Authorization"] == "SSWS test-token"
+        # Authorization header is now set dynamically, not in session
         assert okta_client.session.headers["Accept"] == "application/json"
+        assert okta_client.session.headers["Content-Type"] == "application/json"
 
     @responses.activate
     def test_get_group_by_name_success(self, okta_client: OktaClient) -> None:
@@ -321,3 +326,282 @@ class TestOktaClient:
         assert members[0]["id"] == "user1"
         assert members[1]["id"] == "user2"
         assert members[2]["id"] == "user3"
+
+
+class TestOktaOAuthTokenManager:
+    """Test OktaOAuthTokenManager class."""
+
+    @pytest.fixture
+    def oauth_manager(self) -> OktaOAuthTokenManager:
+        """Create OAuth token manager fixture."""
+        return OktaOAuthTokenManager(
+            domain="example.okta.com",
+            client_id="test-client-id",
+            client_secret="test-client-secret",
+            scopes=["okta.groups.read", "okta.users.read"],
+        )
+
+    def test_init_strips_protocol(self) -> None:
+        """Test that protocol is stripped from domain."""
+        manager = OktaOAuthTokenManager(
+            domain="https://example.okta.com",
+            client_id="id",
+            client_secret="secret",
+            scopes=["okta.groups.read"],
+        )
+        assert manager.domain == "example.okta.com"
+        assert manager.token_url == "https://example.okta.com/oauth2/v1/token"
+
+    @responses.activate
+    def test_get_access_token_success(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test successful token acquisition."""
+        mock_response = {"access_token": "test-access-token", "token_type": "Bearer", "expires_in": 3600}
+
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json=mock_response,
+            status=200,
+        )
+
+        token = oauth_manager.get_access_token()
+        assert token == "test-access-token"
+
+    @responses.activate
+    def test_token_caching(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test that tokens are cached and reused."""
+        mock_response = {"access_token": "cached-token", "token_type": "Bearer", "expires_in": 3600}
+
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json=mock_response,
+            status=200,
+        )
+
+        # First call should fetch token
+        token1 = oauth_manager.get_access_token()
+        assert token1 == "cached-token"
+        assert len(responses.calls) == 1
+
+        # Second call should use cached token
+        token2 = oauth_manager.get_access_token()
+        assert token2 == "cached-token"
+        assert len(responses.calls) == 1  # No additional API call
+
+    @responses.activate
+    def test_token_refresh_on_expiry(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test that expired tokens are refreshed."""
+        first_response = {
+            "access_token": "first-token",
+            "token_type": "Bearer",
+            "expires_in": 1,  # Expire in 1 second
+        }
+        second_response = {"access_token": "second-token", "token_type": "Bearer", "expires_in": 3600}
+
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json=first_response,
+            status=200,
+        )
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json=second_response,
+            status=200,
+        )
+
+        # Get initial token
+        token1 = oauth_manager.get_access_token()
+        assert token1 == "first-token"
+
+        # Wait for token to expire (with 60s safety margin, it expires immediately)
+        time.sleep(0.1)
+
+        # Should get new token
+        token2 = oauth_manager.get_access_token()
+        assert token2 == "second-token"
+        assert len(responses.calls) == 2
+
+    @responses.activate
+    def test_authentication_error(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test OAuth authentication error handling."""
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json={"error": "invalid_client", "error_description": "Invalid client credentials"},
+            status=401,
+        )
+
+        with pytest.raises(OktaAuthenticationError, match="OAuth authentication failed"):
+            oauth_manager.get_access_token()
+
+    @responses.activate
+    def test_api_error(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test generic OAuth API error handling."""
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json={"error": "server_error", "error_description": "Internal server error"},
+            status=500,
+        )
+
+        with pytest.raises(OktaAPIError, match="OAuth token request failed 500"):
+            oauth_manager.get_access_token()
+
+    def test_token_expiry_calculation(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test token expiry time calculation."""
+        # Token should be expired initially
+        assert oauth_manager._is_token_expired() is True
+
+        # Set expiry to future time
+        oauth_manager._token_expiry = time.time() + 120  # 2 minutes from now
+        assert oauth_manager._is_token_expired() is False
+
+        # Set expiry to 30 seconds from now (within safety margin)
+        oauth_manager._token_expiry = time.time() + 30
+        assert oauth_manager._is_token_expired() is True  # Should refresh within 60s
+
+    @responses.activate
+    def test_thread_safety(self, oauth_manager: OktaOAuthTokenManager) -> None:
+        """Test that token manager is thread-safe."""
+        mock_response = {"access_token": "thread-safe-token", "token_type": "Bearer", "expires_in": 3600}
+
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json=mock_response,
+            status=200,
+        )
+
+        # Simulate multiple threads requesting token simultaneously
+        import threading
+
+        results = []
+
+        def get_token() -> None:
+            results.append(oauth_manager.get_access_token())
+
+        threads = [threading.Thread(target=get_token) for _ in range(5)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        # All threads should get the same token
+        assert len(results) == 5
+        assert all(token == "thread-safe-token" for token in results)
+        # Should only have made one API call despite multiple threads
+        assert len(responses.calls) == 1
+
+
+class TestOktaClientWithOAuth:
+    """Test OktaClient with OAuth authentication."""
+
+    @pytest.fixture
+    def oauth_manager(self) -> OktaOAuthTokenManager:
+        """Create OAuth token manager fixture."""
+        manager = OktaOAuthTokenManager(
+            domain="example.okta.com",
+            client_id="test-client-id",
+            client_secret="test-client-secret",
+            scopes=["okta.groups.read", "okta.users.read"],
+        )
+        # Pre-set token to avoid actual OAuth calls in most tests
+        manager._access_token = "test-oauth-token"
+        manager._token_expiry = time.time() + 3600
+        return manager
+
+    @pytest.fixture
+    def oauth_client(self, oauth_manager: OktaOAuthTokenManager) -> OktaClient:
+        """Create OktaClient with OAuth authentication."""
+        return OktaClient(domain="example.okta.com", oauth_token_manager=oauth_manager)
+
+    def test_init_with_oauth(self, oauth_client: OktaClient) -> None:
+        """Test client initialization with OAuth."""
+        assert oauth_client.oauth_token_manager is not None
+        assert oauth_client.api_token is None
+
+    def test_init_requires_auth_method(self) -> None:
+        """Test that client requires at least one auth method."""
+        with pytest.raises(ValueError, match="Either api_token or oauth_token_manager must be provided"):
+            OktaClient(domain="example.okta.com")
+
+    def test_init_rejects_both_auth_methods(self) -> None:
+        """Test that client rejects both auth methods."""
+        manager = OktaOAuthTokenManager(
+            domain="example.okta.com",
+            client_id="id",
+            client_secret="secret",
+            scopes=["okta.groups.read"],
+        )
+        with pytest.raises(ValueError, match="Only one of api_token or oauth_token_manager"):
+            OktaClient(domain="example.okta.com", api_token="token", oauth_token_manager=manager)
+
+    def test_get_auth_header_with_oauth(self, oauth_client: OktaClient) -> None:
+        """Test that OAuth client uses Bearer token."""
+        header = oauth_client._get_auth_header()
+        assert header == "Bearer test-oauth-token"
+
+    def test_get_auth_header_with_api_token(self) -> None:
+        """Test that API token client uses SSWS token."""
+        client = OktaClient(domain="example.okta.com", api_token="test-api-token")
+        header = client._get_auth_header()
+        assert header == "SSWS test-api-token"
+
+    @responses.activate
+    def test_api_call_with_oauth(self, oauth_client: OktaClient) -> None:
+        """Test that API calls use OAuth Bearer token."""
+        mock_response = [{"id": "00g123", "profile": {"name": "Engineering"}}]
+
+        responses.add(
+            responses.GET,
+            "https://example.okta.com/api/v1/groups",
+            json=mock_response,
+            status=200,
+        )
+
+        group = oauth_client.get_group_by_name("Engineering")
+        assert group["id"] == "00g123"
+
+        # Verify Authorization header
+        assert len(responses.calls) == 1
+        assert responses.calls[0].request.headers["Authorization"] == "Bearer test-oauth-token"
+
+    @responses.activate
+    @mock.patch("time.time")
+    def test_token_refresh_during_api_call(
+        self, mock_time: mock.Mock, oauth_manager: OktaOAuthTokenManager
+    ) -> None:
+        """Test that expired tokens are refreshed during API calls."""
+        # Create client with OAuth manager
+        client = OktaClient(domain="example.okta.com", oauth_token_manager=oauth_manager)
+
+        # Set token as expired
+        oauth_manager._token_expiry = 1000.0  # Old timestamp
+        mock_time.return_value = 2000.0  # Current time
+
+        # Mock OAuth token refresh
+        responses.add(
+            responses.POST,
+            "https://example.okta.com/oauth2/v1/token",
+            json={"access_token": "refreshed-token", "token_type": "Bearer", "expires_in": 3600},
+            status=200,
+        )
+
+        # Mock API call
+        responses.add(
+            responses.GET,
+            "https://example.okta.com/api/v1/groups",
+            json=[{"id": "00g123", "profile": {"name": "Test"}}],
+            status=200,
+        )
+
+        # Make API call - should trigger token refresh
+        client.get_group_by_name("Test")
+
+        # Should have refreshed token and used it
+        assert len(responses.calls) == 2  # Token refresh + API call
+        assert responses.calls[0].request.url.endswith("/oauth2/v1/token")
+        assert responses.calls[1].request.headers["Authorization"] == "Bearer refreshed-token"

@@ -1,6 +1,27 @@
 okta:
   domain: ${OKTA_DOMAIN}  # or hardcode: your-company.okta.com
+
+  # Authentication method: "api_token" or "oauth"
+  auth_method: api_token  # Default: api_token
+
+  # API Token authentication (default method)
   api_token: ${OKTA_API_TOKEN}
+
+  # OAuth 2.0 authentication (recommended for production)
+  # Uncomment and configure if using oauth auth_method
+  # oauth:
+  #   client_id: ${OKTA_CLIENT_ID}
+  #   token_endpoint_auth_method: private_key_jwt  # or client_secret_basic
+  #
+  #   # For client_secret_basic/client_secret_post:
+  #   # client_secret: ${OKTA_CLIENT_SECRET}
+  #
+  #   # For private_key_jwt (required by some Okta orgs):
+  #   private_key_path: ${OKTA_PRIVATE_KEY_PATH}  # Path to private.pem
+  #
+  #   scopes:
+  #     - okta.groups.read
+  #     - okta.users.read
 
 grafana:
   url: ${GRAFANA_URL}  # e.g., https://grafana.example.com

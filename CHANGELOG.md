@@ -15,6 +15,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for extra environment variables via extraEnv parameter
 - Automatic pod restart on configuration or secret changes
 - Helm chart documentation with installation and configuration examples
+- OAuth 2.0 Client Credentials authentication support for Okta API
+- OktaOAuthTokenManager class for OAuth token lifecycle management
+- Support for both API token and OAuth authentication methods
+- Automatic OAuth access token refresh with 60-second safety margin
+- Thread-safe OAuth token caching and management
+- Configuration support for OAuth client credentials and scopes
+- Comprehensive test suite for OAuth functionality (18 new tests)
+- Documentation for OAuth setup in README, config.example.yaml, and .env.example
+- Backward compatibility with existing API token authentication
+- Support for private_key_jwt authentication method for OAuth
+- JWT client assertion generation with RS256 signing algorithm
+- Private key loading from PEM files for JWT signing
+- Support for multiple OAuth token endpoint authentication methods (client_secret_basic, client_secret_post, private_key_jwt)
+- Enhanced debug logging for OAuth token acquisition troubleshooting
+- JWT claims logging for debugging authentication issues
+- JWK/JWKSet conversion utility for Okta public key registration
+- JWT header includes kid (Key ID) for JWKSet-based authentication
+- OAuth scope configuration documentation (OKTA_OAUTH_SCOPES.md)
+- Successfully tested private_key_jwt authentication with Okta-generated keys
+- Admin role assignment documentation (OKTA_ADMIN_ROLE_SETUP.md)
+- Documented requirement for Group Administrator role (or similar) for OAuth apps to access Okta APIs
+- Complete OAuth for Okta implementation tested and working end-to-end
+- Troubleshooting guides for 403 errors (TROUBLESHOOTING_403.md)
+- Grant verification utility script (check_okta_grants.py)
+- Complete Okta OAuth setup guide (OKTA_OAUTH_COMPLETE_SETUP.md)
+- Helm chart OAuth support for all authentication methods
+- Helm chart ConfigMap template updated with OAuth configuration
+- Helm chart Secret template updated with OAuth credentials and private keys
+- Helm chart Deployment template with OAuth environment variables and volume mounts
+- Private key volume mounting with secure permissions (0400)
+- Support for external Kubernetes secrets for private keys
+- Helm chart values.yaml expanded with OAuth configuration options
+- Helm chart README updated with OAuth installation examples and security best practices
 
 ## [0.2.0] - 2025-10-21
 

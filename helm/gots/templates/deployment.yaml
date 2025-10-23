@@ -26,11 +26,37 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
+        {{- if eq .Values.okta.authMethod "api_token" }}
         - name: OKTA_API_TOKEN
           valueFrom:
             secretKeyRef:
               name: {{ include "gots.fullname" . }}
               key: OKTA_API_TOKEN
+        {{- else if eq .Values.okta.authMethod "oauth" }}
+        - name: OKTA_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gots.fullname" . }}
+              key: OKTA_CLIENT_ID
+        {{- if .Values.okta.oauth.clientSecret }}
+        - name: OKTA_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gots.fullname" . }}
+              key: OKTA_CLIENT_SECRET
+        {{- end }}
+        - name: OKTA_TOKEN_ENDPOINT_AUTH_METHOD
+          value: {{ .Values.okta.oauth.tokenEndpointAuthMethod | quote }}
+        - name: OKTA_SCOPES
+          value: {{ join "," .Values.okta.oauth.scopes | quote }}
+        {{- if and .Values.okta.oauth.privateKey (not .Values.okta.oauth.privateKeySecretName) }}
+        - name: OKTA_PRIVATE_KEY_PATH
+          value: "/app/secrets/private.pem"
+        {{- else if .Values.okta.oauth.privateKeySecretName }}
+        - name: OKTA_PRIVATE_KEY_PATH
+          value: "/app/secrets/private.pem"
+        {{- end }}
+        {{- end }}
         - name: GRAFANA_API_KEY
           valueFrom:
             secretKeyRef:
@@ -44,12 +70,42 @@ spec:
           mountPath: /app/config.yaml
           subPath: config.yaml
           readOnly: true
+        {{- if eq .Values.okta.authMethod "oauth" }}
+        {{- if and .Values.okta.oauth.privateKey (not .Values.okta.oauth.privateKeySecretName) }}
+        - name: private-key
+          mountPath: /app/secrets
+          readOnly: true
+        {{- else if .Values.okta.oauth.privateKeySecretName }}
+        - name: private-key-external
+          mountPath: /app/secrets
+          readOnly: true
+        {{- end }}
+        {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
       - name: config
         configMap:
           name: {{ include "gots.fullname" . }}
+      {{- if eq .Values.okta.authMethod "oauth" }}
+      {{- if and .Values.okta.oauth.privateKey (not .Values.okta.oauth.privateKeySecretName) }}
+      - name: private-key
+        secret:
+          secretName: {{ include "gots.fullname" . }}
+          items:
+          - key: OKTA_PRIVATE_KEY
+            path: private.pem
+          defaultMode: 0400
+      {{- else if .Values.okta.oauth.privateKeySecretName }}
+      - name: private-key-external
+        secret:
+          secretName: {{ .Values.okta.oauth.privateKeySecretName }}
+          items:
+          - key: {{ .Values.okta.oauth.privateKeySecretKey }}
+            path: private.pem
+          defaultMode: 0400
+      {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

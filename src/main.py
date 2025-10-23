@@ -12,7 +12,7 @@ import schedule
 from src.config import ConfigLoader
 from src.grafana_client import GrafanaClient
 from src.metrics_server import MetricsCollector, MetricsServer
-from src.okta_client import OktaClient
+from src.okta_client import OktaClient, OktaOAuthTokenManager
 from src.sync_service import SyncService
 
 # Global flag for graceful shutdown
@@ -185,7 +185,24 @@ def main() -> NoReturn:
 
         # Initialize API clients
         logging.info("Initializing API clients...")
-        okta_client = OktaClient(config.okta.domain, config.okta.api_token)
+        logging.info("Okta auth method: %s", config.okta.auth_method)
+
+        # Create OktaClient based on auth method
+        if config.okta.auth_method == "oauth":
+            assert config.okta.oauth is not None
+            oauth_token_manager = OktaOAuthTokenManager(
+                domain=config.okta.domain,
+                client_id=config.okta.oauth.client_id,
+                scopes=config.okta.oauth.scopes,
+                client_secret=config.okta.oauth.client_secret,
+                private_key_path=config.okta.oauth.private_key_path,
+                token_endpoint_auth_method=config.okta.oauth.token_endpoint_auth_method,
+            )
+            okta_client = OktaClient(domain=config.okta.domain, oauth_token_manager=oauth_token_manager)
+        else:  # api_token
+            assert config.okta.api_token is not None
+            okta_client = OktaClient(domain=config.okta.domain, api_token=config.okta.api_token)
+
         grafana_client = GrafanaClient(config.grafana.url, config.grafana.api_key)
 
         # Initialize metrics if enabled
