@@ -39,7 +39,7 @@ class TestOktaOAuthConfig:
 
     def test_missing_client_secret(self) -> None:
         """Test error when client_secret is missing."""
-        with pytest.raises(ValueError, match="OAuth client_secret is required"):
+        with pytest.raises(ValueError, match="client_secret is required for client_secret_basic"):
             OktaOAuthConfig(client_id="id", client_secret="", scopes=["okta.groups.read"])
 
     def test_missing_scopes(self) -> None:

@@ -177,14 +177,17 @@ class TestRunSync:
         self, mock_sync_service: Mock, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test successful sync operation."""
+        desired_roles: dict = {}  # type: ignore[type-arg]
         with caplog.at_level(logging.INFO):
-            run_sync(mock_sync_service, "TestGroup", "TestTeam")
+            run_sync(mock_sync_service, "TestGroup", "TestTeam", "Viewer", desired_roles)
 
         # Verify sync was called
-        mock_sync_service.sync_group_to_team.assert_called_once_with("TestGroup", "TestTeam")
+        mock_sync_service.sync_group_to_team.assert_called_once_with(
+            "TestGroup", "TestTeam", "Viewer", desired_roles
+        )
 
         # Verify logging
-        assert "Starting sync: TestGroup -> TestTeam" in caplog.text
+        assert "Starting sync: TestGroup -> TestTeam (role: Viewer)" in caplog.text
         assert "Sync completed: +5 users, -2 users, 0 errors" in caplog.text
 
     def test_run_sync_keyboard_interrupt(
@@ -192,10 +195,11 @@ class TestRunSync:
     ) -> None:
         """Test sync interrupted by user."""
         mock_sync_service.sync_group_to_team.side_effect = KeyboardInterrupt()
+        desired_roles: dict = {}  # type: ignore[type-arg]
 
         with caplog.at_level(logging.INFO):
             with pytest.raises(KeyboardInterrupt):
-                run_sync(mock_sync_service, "TestGroup", "TestTeam")
+                run_sync(mock_sync_service, "TestGroup", "TestTeam", "Viewer", desired_roles)
 
         # Verify interrupt was logged
         assert "Sync interrupted by user" in caplog.text
@@ -205,9 +209,10 @@ class TestRunSync:
     ) -> None:
         """Test sync with error."""
         mock_sync_service.sync_group_to_team.side_effect = Exception("API error")
+        desired_roles: dict = {}  # type: ignore[type-arg]
 
         with caplog.at_level(logging.ERROR):
-            run_sync(mock_sync_service, "TestGroup", "TestTeam")
+            run_sync(mock_sync_service, "TestGroup", "TestTeam", "Viewer", desired_roles)
 
         # Verify error was logged
         assert "Sync failed for TestGroup -> TestTeam" in caplog.text

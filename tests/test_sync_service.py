@@ -92,8 +92,8 @@ class TestSyncService:
         # Setup Grafana members (empty team)
         mock_grafana_client.get_team_members.return_value = []
 
-        # Setup user creation
-        mock_grafana_client.get_or_create_user.side_effect = [
+        # Setup user lookup (users already exist from Okta auto-provisioning)
+        mock_grafana_client.get_user_by_email.side_effect = [
             {"id": 101, "email": "user1@example.com"},
             {"id": 102, "email": "user2@example.com"},
         ]
@@ -110,7 +110,7 @@ class TestSyncService:
         # Verify API calls
         mock_okta_client.get_group_members_by_name.assert_called_once_with("Engineering")
         mock_grafana_client.get_or_create_team.assert_called_once_with("Engineers")
-        assert mock_grafana_client.get_or_create_user.call_count == 2
+        assert mock_grafana_client.get_user_by_email.call_count == 2
         assert mock_grafana_client.add_user_to_team.call_count == 2
 
     def test_sync_with_users_to_remove(
@@ -352,13 +352,13 @@ class TestSyncService:
         # Setup Grafana members (empty)
         mock_grafana_client.get_team_members.return_value = []
 
-        # Setup user creation (user2 fails)
-        def get_or_create_side_effect(email: str):
+        # Setup user lookup (user2 fails)
+        def get_user_side_effect(email: str):
             if email == "user2@example.com":
-                raise GrafanaAPIError("User creation failed")
+                raise GrafanaAPIError("User lookup failed")
             return {"id": 101, "email": email}
 
-        mock_grafana_client.get_or_create_user.side_effect = get_or_create_side_effect
+        mock_grafana_client.get_user_by_email.side_effect = get_user_side_effect
 
         # Execute sync
         metrics = sync_service.sync_group_to_team("Engineering", "Engineers")
