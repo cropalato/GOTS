@@ -21,6 +21,10 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        fsGroup: 1000  # Match the syncuser UID in Dockerfile
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -55,6 +59,13 @@ spec:
         {{- else if .Values.okta.oauth.privateKeySecretName }}
         - name: OKTA_PRIVATE_KEY_PATH
           value: "/app/secrets/private.pem"
+        {{- end }}
+        {{- if .Values.okta.oauth.jwtKeyId }}
+        - name: OKTA_JWT_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gots.fullname" . }}
+              key: OKTA_JWT_KEY_ID
         {{- end }}
         {{- end }}
         - name: GRAFANA_API_KEY

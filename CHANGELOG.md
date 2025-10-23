@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Helm deployment private key permission denied error by adding fsGroup security context
+- Missing OKTA_JWT_KEY_ID environment variable in Helm deployment template
+
 ## [0.3.1] - 2025-10-23
 
 ### Fixed
