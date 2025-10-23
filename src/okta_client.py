@@ -4,7 +4,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import jwt
@@ -165,13 +165,13 @@ class OktaOAuthTokenManager:
             OktaAuthenticationError: If authentication fails
             OktaAPIError: For other API errors
         """
-        payload = {
+        payload: Dict[str, str] = {
             "grant_type": "client_credentials",
             "scope": " ".join(self.scopes),
         }
 
         headers = {"Accept": "application/json"}
-        auth = None
+        auth: Optional[Tuple[str, str]] = None
 
         # Choose authentication method based on configuration
         if self.token_endpoint_auth_method == "private_key_jwt":
@@ -191,10 +191,14 @@ class OktaOAuthTokenManager:
         elif self.token_endpoint_auth_method == "client_secret_post":
             # Send client credentials in POST body
             payload["client_id"] = self.client_id
+            if self.client_secret is None:
+                raise ValueError("client_secret is required for client_secret_post")
             payload["client_secret"] = self.client_secret
             logger.debug("Using client_secret_post authentication")
         else:  # client_secret_basic (default)
             # Send client credentials via HTTP Basic Auth
+            if self.client_secret is None:
+                raise ValueError("client_secret is required for client_secret_basic")
             auth = (self.client_id, self.client_secret)
             logger.debug("Using client_secret_basic authentication")
 
