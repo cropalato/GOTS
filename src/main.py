@@ -198,7 +198,9 @@ def main() -> NoReturn:
                 private_key_path=config.okta.oauth.private_key_path,
                 token_endpoint_auth_method=config.okta.oauth.token_endpoint_auth_method,
             )
-            okta_client = OktaClient(domain=config.okta.domain, oauth_token_manager=oauth_token_manager)
+            okta_client = OktaClient(
+                domain=config.okta.domain, oauth_token_manager=oauth_token_manager
+            )
         else:  # api_token
             assert config.okta.api_token is not None
             okta_client = OktaClient(domain=config.okta.domain, api_token=config.okta.api_token)
@@ -262,7 +264,9 @@ def main() -> NoReturn:
             if not shutdown_requested and config.sync.admin_groups:
                 logging.info("Syncing Grafana admin privileges...")
                 admins_updated = sync_service.sync_admin_privileges(config.sync.admin_groups)
-                logging.info("Admin privilege sync completed: %d permissions updated", admins_updated)
+                logging.info(
+                    "Admin privilege sync completed: %d permissions updated", admins_updated
+                )
 
         # Schedule periodic sync
         schedule.every(config.sync.interval_seconds).seconds.do(sync_job)

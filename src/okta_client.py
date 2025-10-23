@@ -141,7 +141,7 @@ class OktaOAuthTokenManager:
         headers = {
             "kid": "eadE2YW30tucVX8l61Re-cNXAfeQVxq9U_LJ6SXpW00",  # Key ID from Okta JWKSet
             "alg": "RS256",
-            "typ": "JWT"
+            "typ": "JWT",
         }
         assertion = jwt.encode(claims, self._private_key, algorithm="RS256", headers=headers)
 
@@ -177,7 +177,9 @@ class OktaOAuthTokenManager:
         if self.token_endpoint_auth_method == "private_key_jwt":
             # Use client_assertion for private_key_jwt
             client_assertion = self._create_client_assertion()
-            payload["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            payload[
+                "client_assertion_type"
+            ] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
             payload["client_assertion"] = client_assertion
             payload["client_id"] = self.client_id
             logger.debug("Using private_key_jwt authentication")
@@ -218,10 +220,7 @@ class OktaOAuthTokenManager:
 
             # Decode token to see what scopes were granted (for debugging)
             try:
-                decoded_token = jwt.decode(
-                    self._access_token,
-                    options={"verify_signature": False}
-                )
+                decoded_token = jwt.decode(self._access_token, options={"verify_signature": False})
                 granted_scopes = decoded_token.get("scp", [])
                 logger.info("OAuth token acquired successfully, expires in %d seconds", expires_in)
                 logger.info("Granted scopes: %s", granted_scopes)
@@ -241,7 +240,9 @@ class OktaOAuthTokenManager:
                 logger.error("Error details: %s", error_data)
             except Exception:  # pylint: disable=broad-except
                 pass
-            raise OktaAuthenticationError("OAuth authentication failed - invalid client credentials")
+            raise OktaAuthenticationError(
+                "OAuth authentication failed - invalid client credentials"
+            )
 
         logger.error("OAuth token request failed: %s - %s", response.status_code, response.text)
         raise OktaAPIError(f"OAuth token request failed {response.status_code}: {response.text}")

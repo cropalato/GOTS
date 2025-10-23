@@ -36,9 +36,7 @@ class OktaOAuthConfig:
 
         if self.token_endpoint_auth_method in ["client_secret_basic", "client_secret_post"]:
             if not self.client_secret:
-                raise ValueError(
-                    f"client_secret is required for {self.token_endpoint_auth_method}"
-                )
+                raise ValueError(f"client_secret is required for {self.token_endpoint_auth_method}")
         elif self.token_endpoint_auth_method == "private_key_jwt":
             if not self.private_key_path:
                 raise ValueError("private_key_path is required for private_key_jwt")
@@ -64,7 +62,9 @@ class OktaConfig:
         # Validate auth method
         valid_auth_methods = ["api_token", "oauth"]
         if self.auth_method not in valid_auth_methods:
-            raise ValueError(f"auth_method must be one of {valid_auth_methods}, got: {self.auth_method}")
+            raise ValueError(
+                f"auth_method must be one of {valid_auth_methods}, got: {self.auth_method}"
+            )
 
         # Validate credentials based on auth method
         if self.auth_method == "api_token":
@@ -111,9 +111,7 @@ class GroupMapping:
         # Validate and normalize role
         valid_roles = ["Admin", "Editor", "Viewer"]
         if self.grafana_role not in valid_roles:
-            raise ValueError(
-                f"grafana_role must be one of {valid_roles}, got: {self.grafana_role}"
-            )
+            raise ValueError(f"grafana_role must be one of {valid_roles}, got: {self.grafana_role}")
 
 
 @dataclass

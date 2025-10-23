@@ -297,7 +297,9 @@ class SyncService:
         # Get all Grafana users and update admin privileges
         try:
             # Fetch all organization users
-            response = self.grafana_client._get("/api/org/users")  # pylint: disable=protected-access
+            response = self.grafana_client._get(
+                "/api/org/users"
+            )  # pylint: disable=protected-access
             all_users = response.json()
 
             logger.info("Checking admin privileges for %d Grafana users", len(all_users))

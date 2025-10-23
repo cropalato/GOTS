@@ -355,7 +355,11 @@ class TestOktaOAuthTokenManager:
     @responses.activate
     def test_get_access_token_success(self, oauth_manager: OktaOAuthTokenManager) -> None:
         """Test successful token acquisition."""
-        mock_response = {"access_token": "test-access-token", "token_type": "Bearer", "expires_in": 3600}
+        mock_response = {
+            "access_token": "test-access-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
 
         responses.add(
             responses.POST,
@@ -397,7 +401,11 @@ class TestOktaOAuthTokenManager:
             "token_type": "Bearer",
             "expires_in": 1,  # Expire in 1 second
         }
-        second_response = {"access_token": "second-token", "token_type": "Bearer", "expires_in": 3600}
+        second_response = {
+            "access_token": "second-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
 
         responses.add(
             responses.POST,
@@ -466,7 +474,11 @@ class TestOktaOAuthTokenManager:
     @responses.activate
     def test_thread_safety(self, oauth_manager: OktaOAuthTokenManager) -> None:
         """Test that token manager is thread-safe."""
-        mock_response = {"access_token": "thread-safe-token", "token_type": "Bearer", "expires_in": 3600}
+        mock_response = {
+            "access_token": "thread-safe-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
 
         responses.add(
             responses.POST,
@@ -525,7 +537,9 @@ class TestOktaClientWithOAuth:
 
     def test_init_requires_auth_method(self) -> None:
         """Test that client requires at least one auth method."""
-        with pytest.raises(ValueError, match="Either api_token or oauth_token_manager must be provided"):
+        with pytest.raises(
+            ValueError, match="Either api_token or oauth_token_manager must be provided"
+        ):
             OktaClient(domain="example.okta.com")
 
     def test_init_rejects_both_auth_methods(self) -> None:

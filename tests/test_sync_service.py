@@ -547,6 +547,7 @@ class TestSyncService:
         mock_grafana_client: Mock,
     ) -> None:
         """Test syncing admin privileges from multiple groups."""
+
         # Setup Okta groups
         def get_group_members_side_effect(group_name: str):
             if group_name == "Grafana-Admins":

@@ -61,9 +61,7 @@ class TestOktaConfig:
 
     def test_valid_config_with_oauth(self) -> None:
         """Test valid Okta configuration with OAuth."""
-        oauth = OktaOAuthConfig(
-            client_id="id", client_secret="secret", scopes=["okta.groups.read"]
-        )
+        oauth = OktaOAuthConfig(client_id="id", client_secret="secret", scopes=["okta.groups.read"])
         config = OktaConfig(domain="example.okta.com", auth_method="oauth", oauth=oauth)
         assert config.domain == "example.okta.com"
         assert config.auth_method == "oauth"
@@ -92,12 +90,16 @@ class TestOktaConfig:
 
     def test_missing_api_token_when_using_api_token_method(self) -> None:
         """Test error when API token is missing for api_token auth method."""
-        with pytest.raises(ValueError, match="Okta API token is required when using api_token auth method"):
+        with pytest.raises(
+            ValueError, match="Okta API token is required when using api_token auth method"
+        ):
             OktaConfig(domain="example.okta.com", auth_method="api_token")
 
     def test_missing_oauth_when_using_oauth_method(self) -> None:
         """Test error when OAuth config is missing for oauth auth method."""
-        with pytest.raises(ValueError, match="OAuth configuration is required when using oauth auth method"):
+        with pytest.raises(
+            ValueError, match="OAuth configuration is required when using oauth auth method"
+        ):
             OktaConfig(domain="example.okta.com", auth_method="oauth")
 
 
